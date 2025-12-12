@@ -1,21 +1,154 @@
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
+    'Helvetica Neue', sans-serif;
 }
 
-.Sensor_container {
-    display: block;
-    min-width: 240px;
-    max-width: 600px;
-    margin: auto;
-    margin-bottom: 2%;
-    border: 1px solid black;
+.flex_sensor_container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 2%;
+  margin-bottom: 2%;
+  width: 100%;
+}
+
+.flex_sensor_container li {
+  list-style: none;
+}
+
+.sensor_container {
+  display: grid;
+  max-width: 500px;
+  grid-template-columns: 1fr;
+  border-radius: 26px;
+  background-color: rgba(255, 255, 255, 0.15);
+  padding: 2%;
 }
 
 .text_sensors {
-    font-size: 25px;
-    text-align: center;
+  font-size: 25px;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+}
+
+.text_sensors h2 {
+}
+
+.container_data {
+  border-radius: 16px;
+  background-color: rgba(80, 80, 80, 0.867);
+  margin: 2% 0;
+  padding: 10px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease-in-out; /* Плавный переход для раскрытия */
+  cursor: pointer; /* Указываем, что блок кликабельный */
+}
+
+.container_data li .title {
+  font-size: 19px;
+  text-transform: uppercase;
+  color: #ecbf42;
+  margin-bottom: 5px;
+  margin-right: 10px;
+}
+
+.data_info {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  align-items: center;
+}
+
+.data_info p {
+  white-space: normal;
+}
+
+/* Скрываем детали датчика по умолчанию */
+.sensor-details {
+  display: none; /* Скрыто по умолчанию */
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+  margin-top: 10px; /* Отступ для появившихся деталей */
+  font-size: 0.95em;
+  color: #eee; /* Цвет текста для деталей */
+}
+
+/* Показываем детали, когда контейнер развернут */
+.container_data.expanded .sensor-details {
+  display: block;
+  opacity: 1;
+  max-height: 500px;
+}
+
+/* Стиль для заголовка, который будет кликабельным */
+.sensor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  max-width: 400px;
+}
+
+/* Стиль для стрелки */
+.arrow {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transition: transform 0.3s ease;
+  margin-left: 10px;
+}
+
+.arrow.down {
+  transform: rotate(45deg);
+}
+
+.arrow.up {
+  transform: rotate(-135deg);
+}
+
+/* Стиль для выделения датчика с ошибкой */
+.sensor-error .container_data {
+  background: linear-gradient(135deg, rgba(255, 90, 90, 0.2), rgba(255, 90, 90, 0.05));
+  border-color: rgba(255, 90, 90, 0.3);
+}
+
+.sensor-error .title {
+  color: #ff6666;
+}
+
+.sensor-error .data_info .error-text {
+  color: #ff6666;
+  font-weight: bold;
+}
+
+.sensor-error .data_info .AlertValue {
+  color: #ff6666;
+  font-weight: bold;
+}
+
+/* Стиль для индикатора ошибки при свернутом состоянии */
+.error-indicator {
+  display: inline-flex; /* Используем flex для выравнивания */
+  justify-content: center;
+  align-items: center;
+  width: 22px; /* Размер индикатора */
+  height: 22px;
+  background-color: #ff6666; /* Красный фон */
+  color: white; /* Белый текст */
+  border-radius: 50%; /* Круглая форма */
+  font-size: 14px;
+  font-weight: bold;
+  flex-shrink: 0; /* Не сжимать индикатор */
+  cursor: help; /* Курсор, намекающий на подсказку */
 }

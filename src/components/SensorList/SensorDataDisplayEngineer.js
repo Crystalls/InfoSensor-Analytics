@@ -1,110 +1,193 @@
 // SensorDataDisplay.js
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { API_BASE_URL } from '../../services/api'; // Assuming you have an API base URL
-import AlertValue from '../AlertList/AlertList';
-import '../SensorList/SensorList.css';
-
-function TemperatureDisplay({ temperature }) {
-    return (
-        <span>{temperature} °C</span>
-    );
-}
-
-
+import React, { useState, useEffect } from 'react'
+import axios from 'axios'
+import { API_BASE_URL } from '../../services/api' // Assuming you have an API base URL
+import AlertValue from '../AlertList/AlertList' // Предполагаем, что AlertValue умеет подсвечивать ошибки
+import '../SensorList/SensorList.css'
 
 function SensorDataDisplayEngineer() {
-    const [sensorData, setSensorData] = useState([]);
-    const [isLoading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+  const [sensorData, setSensorData] = useState([])
+  const [isLoading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-    const temperatureThreshold = 45;
-    const humidityThreshold = 65;
+  const temperatureThreshold = 45
+  const humidityThreshold = 65
+  const minPascalThreshold = 0.7
+  const maxPascalThreshold = 1.5
 
-    useEffect(() => {
-        const fetchSensorData = async () => {
-            setLoading(true);
-            setError('');
-            try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    setError('No token found. Please log in.');
-                    return;
-                }
+  // Вспомогательная функция для определения, есть ли ошибка
+  const checkSensorError = (sensor) => {
+    const lowerCaseType = sensor.sensor_type.toLowerCase()
 
-                const response = await axios.get(`${API_BASE_URL}/sensor-data`, {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                });
+    if (lowerCaseType.includes('температур')) {
+      return sensor.value > temperatureThreshold
+    } else if (lowerCaseType.includes('влажн')) {
+      return sensor.value > humidityThreshold
+    } else if (lowerCaseType.includes('давл')) {
+      return sensor.value < minPascalThreshold || sensor.value > maxPascalThreshold
+    }
+    return false
+  }
 
-                setSensorData(response.data);
-            } catch (err) {
-                setError(err.response?.data?.message || 'Failed to fetch sensor data');
-                console.error("Error fetching sensor data:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
+  // Функция для получения сообщения об ошибке (для title индикатора !)
+  const getAlertMessage = (sensor) => {
+    const lowerCaseType = sensor.sensor_type.toLowerCase()
+    const value = sensor.value
 
-        fetchSensorData();
-    }, []);
+    if (lowerCaseType.includes('температур')) {
+      if (value > temperatureThreshold) return `Превышены пороговые значения температуры (${temperatureThreshold} °C)`
+    } else if (lowerCaseType.includes('влажн')) {
+      if (value > humidityThreshold) return `Превышены пороговые значения влажности (${humidityThreshold} %)`
+    } else if (lowerCaseType.includes('давл')) {
+      if (value < minPascalThreshold) return `Давление ниже порогового значения (${minPascalThreshold} Па)`
+      if (value > maxPascalThreshold) return `Превышены пороговые значения давления (${maxPascalThreshold} Па)`
+    }
+    return ''
+  }
 
-    if (isLoading) {
-        return <p>Loading sensor data...</p>;
+  // !!! ОПРЕДЕЛЕНИЕ ФУНКЦИИ !!!
+  // Функция для получения основного порогового значения для AlertValue
+  const getAlertThresholdForAlertValue = (sensor) => {
+    const lowerCaseType = sensor.sensor_type.toLowerCase()
+    if (lowerCaseType.includes('температур')) {
+      return temperatureThreshold
+    } else if (lowerCaseType.includes('влажн')) {
+      return humidityThreshold
+    } else if (lowerCaseType.toLowerCase().includes('давл')) {
+      // Для датчиков давления, передаем объект диапазона
+      return { min: minPascalThreshold, max: maxPascalThreshold }
+    }
+    return 200 // Default threshold for unknown types
+  }
+
+  useEffect(() => {
+    const fetchSensorData = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) {
+          setError('No token found. Please log in.')
+          return
+        }
+
+        const response = await axios.get(`${API_BASE_URL}/sensor-data`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        const formattedData = response.data.map((data) => ({
+          ...data,
+          isExpanded: false,
+          hasError: checkSensorError(data),
+        }))
+        setSensorData(formattedData)
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to fetch sensor data')
+        console.error('Error fetching sensor data:', err)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    if (error) {
-        return <p style={{ color: 'red' }}>Error: {error}</p>;
-    }
+    fetchSensorData()
+  }, []) // Пустой массив зависимостей означает, что эффект выполнится один раз при монтировании
 
-    return (
-        <div>
-            <h2>Sensor Data</h2>
-            {sensorData.length > 0 ? (
-                <ul>
-                    {sensorData.map(data => {
-                        let alertThreshold, alertMessage;
+  const toggleExpand = (sensorId) => {
+    setSensorData((prevData) =>
+      prevData.map((data) => (data.sensor_id === sensorId ? { ...data, isExpanded: !data.isExpanded } : data)),
+    )
+  }
 
-                        if (data.sensor_type.toLowerCase().includes('температур')) {
-                            alertThreshold = temperatureThreshold;
-                            alertMessage = `Превышены пороговые значения для температуры`;
-                        } else if (data.sensor_type.toLowerCase().includes('влажн')) {
-                            alertThreshold = humidityThreshold;
-                            alertMessage = `Превышены пороговые значения для влажности`;
-                        } else {
-                            alertThreshold = 200;  // Default threshold
-                            alertMessage = `Превышены пороговые значения для ${data.sensor_type.toLowerCase()}`;
-                        }
+  if (isLoading) {
+    return <p>Loading sensor data...</p>
+  }
 
-                        return (
-                            
-                            <li key={data._id}>
-                                <div className='Sensor_container'>
-                                    <div className='text_sensors'>
-                                        ID Датчика: {data.sensor_id},
-                                        <br></br>
-                                        Тип датчика: {data.sensor_type.toLowerCase()},
-                                        <br></br>
-                                        Показатели: <AlertValue
-                                            sensorType={data.sensor_type}
-                                            value={data.value} // value не складывается с unit, выносим unit в AlertValue
-                                            alertThreshold={alertThreshold}
-                                            alertMessage={alertMessage}
-                                            unit={data.unit}  // передаем unit как отдельный prop
-                                        />
-                                        Дата замера: {new Date(data.timestamp).toLocaleString()}
-                                    </div>
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
-            ) : (
-                <p>No sensor data available.</p>
-            )}
+  if (error) {
+    return <p style={{ color: 'red' }}>Error: {error}</p>
+  }
+
+  return (
+    <div className='flex_sensor_container'>
+      <div className='sensor_container'>
+        <div className='text_sensors'>
+          <h2>
+            Sensor <br></br> Data
+          </h2>
         </div>
-    );
+        <div>
+          {' '}
+          {/* Этот div будет второй колонкой в grid */}
+          {sensorData.length > 0 ? (
+            <ul>
+              {sensorData.map((data) => {
+                const alertMessage = getAlertMessage(data)
+                // Получаем порог или диапазон для AlertValue
+                const alertThresholdOrRange = getAlertThresholdForAlertValue(data)
+
+                return (
+                  <div
+                    key={data._id}
+                    className={`
+                      container_data
+                      ${data.isExpanded ? 'expanded' : ''}
+                      ${data.hasError ? 'sensor-error' : ''}
+                    `}
+                  >
+                    <li className='sensor-item'>
+                      <div
+                        className='sensor-header'
+                        onClick={() => toggleExpand(data.sensor_id)}
+                      >
+                        <h1 className='title'>
+                          ID Датчика: {data.sensor_id}
+                          <br></br>
+                          Локация датчика: {data.wsection}
+                        </h1>
+                        {data.hasError && (
+                          <span
+                            className='error-indicator'
+                            title={alertMessage} // Отображаем полное сообщение ошибки при наведении
+                          >
+                            !
+                          </span>
+                        )}
+                        <span className={`arrow ${data.isExpanded ? 'up' : 'down'}`}></span>
+                      </div>
+
+                      {data.isExpanded && (
+                        <div className='sensor-details'>
+                          Тип датчика: {data.sensor_type.toLowerCase()}
+                          <br></br>
+                          <div className='data_info'>
+                            Показатели:
+                            <AlertValue
+                              sensorType={data.sensor_type}
+                              value={data.value}
+                              // Передаем порог или диапазон для AlertValue
+                              alertThreshold={alertThresholdOrRange}
+                              // Передаем сформированное сообщение об ошибке
+                              alertMessage={alertMessage}
+                              unit={data.unit}
+                            />
+                          </div>
+                          Дата замера: {new Date(data.timestamp).toLocaleString()}
+                        </div>
+                      )}
+                    </li>
+                  </div>
+                )
+              })}
+            </ul>
+          ) : (
+            <p>No sensor data available.</p>
+          )}
+        </div>{' '}
+        {/* Конец второй колонки grid */}
+      </div>
+    </div>
+  )
 }
 
-export default SensorDataDisplayEngineer;
+export default SensorDataDisplayEngineer
