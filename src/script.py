@@ -1,137 +1,143 @@
-import pymongo
-import random
-import time
+
+from pymongo import MongoClient
 from datetime import datetime
+import time
+import random
 
-# --- Конфигурация MongoDB ---
-MONGO_URI = "mongodb://localhost:27017/" # Адрес вашей MongoDB
-DB_NAME = "newdb"             # Имя базы данных
-COLLECTION_NAME = "sensor_current_data" # Имя коллекции
 
-# --- Конфигурация датчиков ---
-# Список словарей, каждый из которых описывает один датчик
-sensors_config = [
-    {
-        "id": "SNSR-001",
+# ... (Настройки подключения)
+MONGO_URI = "mongodb://localhost:27017/" 
+DB_NAME = "newdb"
+
+
+
+client = MongoClient(MONGO_URI)
+db = client[DB_NAME]
+COLLECTION_HISTORY = db["sensor_data_histories"]
+COLLECTION_CURRENT = db["sensor_current_data"] # НОВАЯ КОЛЛЕКЦИЯ
+
+SIMULATION_SCENARIOS = {
+    # --- Инженер (Цех Б) ---
+    "ENG_B_ENGINE_1_TEMP": {
+        "sensor_id": "SNSR-001", 
+        "sensor_type": "Датчик температуры",
+        "role": "engineer",
+        "wsection": "Цех №2",        # Уровень 1: Цех
+        "asset": "Двигатель 1",      # Уровень 2: Объект
         "type": "temperature",
-        "unit": "C",
-        "role": "engineer",
-        "wsection": "Двигатель Б",
-        "min_val": 15.0,
-        "max_val": 30.0,
-        "current_val": 20.0,  # Начальное значение
-        "change_range": (-2.5, 15) # Максимальное изменение за шаг
+        "params": {"mean": 29.73, "std_dev": 1.0, "unit": "C"},
     },
-    {
-        "id": "SNSR-045",
-        "type": "humidity",
-        "unit": "%",
+    "ENG_B_ENGINE_1_PRESSURE": {
+        "sensor_id": "SNSR-002", 
+        "sensor_type": "Датчик давления",
         "role": "engineer",
-        "wsection": "Двигатель Б",
-        "min_val": 40.0,
-        "max_val": 90.0,
-        "current_val": 60.0,  # Начальное значение
-        "change_range": (-1.5, 1.5) # Максимальное изменение за шаг
-    },
-    {
-        "id": "SNSR-0252",
+        "wsection": "Цех №2",
+        "asset": "Двигатель 1",      # То же самое, что и у температуры
         "type": "pressure",
-        "unit": "Па",
-        "role": "engineer",
-        "wsection": "Двигатель Б",
-        "min_val": 0.7,
-        "max_val": 2.0,
-        "current_val": 1.0, # Начальное значение
-        "change_range": (-0.4, 0.8) # Максимальное изменение за шаг
+        "params": {"mean": 3.0, "std_dev": 0.1, "unit": "Bar",
+                   "thresholds": {"min": 2.5, "max": 4.0}},
     },
-    # Можно добавить больше датчиков, например, для другого местоположения
-    {
-        "id": "sensor_004_temp_field2",
+    # --- Инженер (Цех Б) - Другой объект ---
+    "ENG_B_MACHINE_5_VIBRO": {
+        "sensor_id": "SNSR-004", 
+        "sensor_type": "Датчик вибрации",
+        "role": "engineer",
+        "wsection": "Цех №2",
+        "asset": "Станок 5",         # Другой объект в том же цехе
+        "type": "vibration",
+        "params": {"mean": 0.8, "std_dev": 0.15, "unit": "mm/s"},
+    },
+    
+    # --- Ученый (Поле А) ---
+    "SCI_A_FIELD_A_MOISTURE": {
+        "sensor_id": "SNSR-010",
+        "sensor_type": "Датчик влажности",
+        "role": "scientist",
+        "wsection": "Поле А",
+        "asset": "Почва",             # Объект для ученого
+        "type": "moisture",
+        "params": {"mean": 45.0, "std_dev": 5.0, "unit": "%"},
+    },
+
+    # Сценарий 4: Инженер 2 (Двигатель В) - Новый датчик вибрации
+    "ENG_B_ENG_C_VIBRO": {
+        "sensor_id": "SNSR-003", 
+        "sensor_type": "Датчик вибрации",
+        "role": "engineer",
+        "wsection": "Цех №2",
+        "asset": "Станок ЧПУ",         # Другой объект в том же цехе
+        "params": {"mean": 0.8, "std_dev": 0.15, "unit": "мм/с"},
+    },
+    
+    # Сценарий 5: Ученый (Поле А) - Температура
+    "SCI_A_FIELD_A_TEMP": {
+        "sensor_id": "SNSR-011",
+        "sensor_type": "Датчик температуры",
+        "role": "scientist",
+        "wsection": "Поле А",
+        "asset": "Почва",             # Объект для ученого
         "type": "temperature",
-        "unit": "Celsius",
-        "min_val": 10.0,
-        "max_val": 35.0,
-        "current_val": 22.0,
-        "change_range": (-0.8, 0.8)
+        "params": {"mean": 15.0, "std_dev": 1.5, "unit": "°C"},
+    },
+    
+    # Сценарий 6: Ученый (Поле Г) - Новая локация
+    "SCI_A_FIELD_G_LIGHT": {
+        "sensor_id": "SNSR-022",
+        "sensor_type": "Датчик освещенности",
+        "role": "scientist",
+        "wsection": "Поле Г",
+        "type": "Датчик света",
+        "params": {"mean": 80000, "std_dev": 5000, "unit": "Люкс"},
+        },
     }
-]
-
-send_interval_sec = 2
-
-# --- Функции ---
-
-def generate_value(min_val, max_val, change_range):
-    """
-    Генерирует новое значение. В этом режиме мы генерируем его
-    абсолютно случайно в заданном диапазоне, а не на основе предыдущего.
-    Если нужно сохранять "дрейф", нам придётся читать предыдущее значение из DB.
-    """
-    # Здесь мы генерируем случайное значение в рамках минимума/максимума
-    # Если нужен дрейф, нужно добавить чтение из DB, см. ниже.
-    return random.uniform(min_val, max_val)
 
 
-def update_data_in_mongo(sensor_id, sensor_type, sensor_unit, new_value):
-    """
-    Обновляет (или вставляет, если нет) запись в MongoDB по sensor_id.
-    """
-    try:
-        client = pymongo.MongoClient(MONGO_URI)
-        db = client[DB_NAME]
-        collection = db[COLLECTION_NAME]
+
+def get_simulated_value(mean, std_dev):
+    # Используем стандартное нормальное распределение для реалистичности
+    return round(random.gauss(mean, std_dev), 2)
+
+def generate_and_store_data(scenarios):
+    current_time = datetime.utcnow()
+    
+    for scenario_key, config in scenarios.items():
+        params = config['params']
         
-        # Фильтр: ищем документ по sensor_id
-        filter_query = {"sensor_id": sensor_id}
-        
-        # Обновление: используем $set для изменения полей и $currentDate для метки времени
-        update_query = {
-            "$set": {
-                "value": round(new_value, 2),
-                "type": sensor_type,
-                "unit": sensor_unit,
-                "timestamp": datetime.utcnow() # Время последнего обновления
-            },
-            "$currentDate": {
-                "last_updated": True # Автоматически проставит текущее время в UTC
-            }
+        # 1. Генерируем значение
+        new_value = get_simulated_value(params['mean'], params['std_dev'])
+
+        #  1. Запись в Коллекцию Истории 
+        history_record = {
+            "sensor_id": config['sensor_id'],
+            "timestamp": current_time,
+            "sensor_type": config['sensor_type'],
+            "value": new_value,
+            "unit": params['unit'],
+            "role": config['role'],       # Роль привязывается к записи
+            "wsection": config['wsection'], # Секция привязывается к записи
+        }
+        COLLECTION_HISTORY.insert_one(history_record)
+
+        # --- 2. Запись/Обновление в Коллекцию Текущего Состояния ---
+        current_record = {
+            "sensor_id": config['sensor_id'],
+            "value": new_value,
+            "unit": params['unit'],
+            "last_updated": current_time,
+            "role": config['role'],
+            "wsection": config['wsection'],
+            "sensor_type": config['sensor_type'],
         }
         
-        # Выполняем обновление. upsert=True гарантирует, что запись будет создана, если не найдена
-        result = collection.update_one(filter_query, update_query, upsert=True)
-        
-        # Вывод информации о результате
-        if result.upserted_id:
-            print(f"СОЗДАНА новая запись для {sensor_id} (ID: {result.upserted_id})")
-        elif result.modified_count > 0:
-            print(f"ОБНОВЛЕНА запись для {sensor_id}")
-        
-        client.close()
-        
-    except Exception as e:
-        print(f"Произошла ошибка при обновлении данных для {sensor_id}: {e}")
+        COLLECTION_CURRENT.update_one(
+            {"sensor_id": config['sensor_id']},
+            {"$set": current_record},
+            upsert=True
+        )
 
-# --- Главный цикл ---
 
 if __name__ == "__main__":
-    print(f"Начинаем имитацию датчиков. Обновление данных каждые {send_interval_sec} секунд.")
-    print(f"Подключение к MongoDB: {MONGO_URI}, БД: {DB_NAME}, Коллекция: {COLLECTION_NAME}")
-
     while True:
-        for sensor_conf in sensors_config:
-            
-            # Генерируем новое значение для текущего датчика
-            new_value = generate_value(
-                sensor_conf["min_val"], 
-                sensor_conf["max_val"], 
-                sensor_conf["change_range"]
-            )
-            
-            update_data_in_mongo(
-                sensor_id=sensor_conf["id"],
-                sensor_type=sensor_conf["type"],
-                sensor_unit=sensor_conf["unit"],
-                new_value=new_value
-            )
-        
-        print("-" * 20)
-        time.sleep(send_interval_sec)
+        generate_and_store_data(SIMULATION_SCENARIOS)
+        time.sleep(10) # Обновляем все данные каждые 10 секунд
+

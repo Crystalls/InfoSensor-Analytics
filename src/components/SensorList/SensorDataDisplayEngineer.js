@@ -13,10 +13,16 @@ function SensorDataDisplayEngineer() {
   const temperatureThreshold = 45
   const humidityThreshold = 65
   const minPascalThreshold = 0.7
-  const maxPascalThreshold = 1.5
+  const maxPascalThreshold = 3.5
 
   // Вспомогательная функция для определения, есть ли ошибка
   const checkSensorError = (sensor) => {
+    // !!! ЗАЩИТА: Проверяем наличие sensor_type перед вызовом toLowerCase() !!!
+    if (!sensor || !sensor.sensor_type || typeof sensor.sensor_type !== 'string') {
+      console.warn('Invalid sensor object or missing sensor_type:', sensor)
+      // Если тип неизвестен, считаем, что ошибки нет (или возвращаем false)
+      return false
+    }
     const lowerCaseType = sensor.sensor_type.toLowerCase()
 
     if (lowerCaseType.includes('температур')) {
@@ -31,6 +37,7 @@ function SensorDataDisplayEngineer() {
 
   // Функция для получения сообщения об ошибке (для title индикатора !)
   const getAlertMessage = (sensor) => {
+    if (!sensor || !sensor.sensor_type) return ''
     const lowerCaseType = sensor.sensor_type.toLowerCase()
     const value = sensor.value
 
@@ -48,6 +55,7 @@ function SensorDataDisplayEngineer() {
   // !!! ОПРЕДЕЛЕНИЕ ФУНКЦИИ !!!
   // Функция для получения основного порогового значения для AlertValue
   const getAlertThresholdForAlertValue = (sensor) => {
+    if (!sensor || !sensor.sensor_type) return 200
     const lowerCaseType = sensor.sensor_type.toLowerCase()
     if (lowerCaseType.includes('температур')) {
       return temperatureThreshold

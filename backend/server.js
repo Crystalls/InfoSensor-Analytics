@@ -213,6 +213,23 @@ app.use((req, res, next) => {
   }
 })
 
+const userRole = req.user.role // e.g., 'engineer'
+const allowedSections = req.user.allowedSections // e.g., ['Цех №2']
+const allowedAssets = req.user.allowedAssets // e.g., ['Двигатель 1', 'Станок 12']
+
+const data = await Reading.find({
+  // 1. Фильтрация по роли, если это необходимо
+  role: userRole,
+
+  // 2. Фильтрация по разрешенным цехам (WSection)
+  wsection: { $in: allowedSections },
+
+  // 3. Фильтрация по разрешенным объектам (Asset)
+  asset: { $in: allowedAssets },
+
+  timestamp: { $gte: oneDayAgo },
+}).sort({ timestamp: 1 })
+
 app.post('/sensor-data', async (req, res) => {
   const { sensorId, crop_type, temperature, humidity, wsection } = req.body
   const userId = req.user.userId
