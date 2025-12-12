@@ -1,8 +1,9 @@
 
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 from datetime import datetime
 import time
 import random
+import uuid
 
 
 # ... (Настройки подключения)
@@ -11,114 +12,88 @@ DB_NAME = "newdb"
 
 
 
-client = MongoClient(MONGO_URI)
+client = MongoClient(MONGO_URI, uuidrepresentation="standard")
 db = client[DB_NAME]
-COLLECTION_HISTORY = db["sensor_data_histories"]
-COLLECTION_CURRENT = db["sensor_current_data"] # НОВАЯ КОЛЛЕКЦИЯ
+COLLECTION_HISTORY = "sensor_data_histories"
+COLLECTION_CURRENT = "sensor_current_data"
 
 SIMULATION_SCENARIOS = {
-    # --- Инженер (Цех Б) ---
+    # --- Сценарий для Инженера (Цех №2) ---
     "ENG_B_ENGINE_1_TEMP": {
         "sensor_id": "SNSR-001", 
         "sensor_type": "Датчик температуры",
         "role": "engineer",
-        "wsection": "Цех №2",        # Уровень 1: Цех
-        "asset": "Двигатель 1",      # Уровень 2: Объект
+        "wsection": "Цех №2",        # Доступно инженеру в Цехе №2
+        "asset": "Двигатель 1",      # Объект внутри Цеха №2
         "type": "temperature",
-        "params": {"mean": 29.73, "std_dev": 1.0, "unit": "C"},
+        "params": {"mean": 29.73, "std_dev": 1.0, "unit": "°C"},
     },
     "ENG_B_ENGINE_1_PRESSURE": {
         "sensor_id": "SNSR-002", 
         "sensor_type": "Датчик давления",
         "role": "engineer",
         "wsection": "Цех №2",
-        "asset": "Двигатель 1",      # То же самое, что и у температуры
+        "asset": "Двигатель 1",      
         "type": "pressure",
-        "params": {"mean": 3.0, "std_dev": 0.1, "unit": "Bar",
+        "params": {"mean": 3.0, "std_dev": 0.1, "unit": "Па",
                    "thresholds": {"min": 2.5, "max": 4.0}},
     },
-    # --- Инженер (Цех Б) - Другой объект ---
     "ENG_B_MACHINE_5_VIBRO": {
         "sensor_id": "SNSR-004", 
         "sensor_type": "Датчик вибрации",
         "role": "engineer",
         "wsection": "Цех №2",
-        "asset": "Станок 5",         # Другой объект в том же цехе
+        "asset": "Станок 5",         # Другой объект в Цехе №2
         "type": "vibration",
-        "params": {"mean": 0.8, "std_dev": 0.15, "unit": "mm/s"},
+        "params": {"mean": 0.8, "std_dev": 0.15, "unit": "мм/с"},
     },
     
-    # --- Ученый (Поле А) ---
+    # --- Сценарий для Ученого (Поле А) ---
     "SCI_A_FIELD_A_MOISTURE": {
         "sensor_id": "SNSR-010",
         "sensor_type": "Датчик влажности",
         "role": "scientist",
         "wsection": "Поле А",
-        "asset": "Почва",             # Объект для ученого
+        "asset": "Почва (Сектор 1)",  # Объект внутри Поля А
         "type": "moisture",
         "params": {"mean": 45.0, "std_dev": 5.0, "unit": "%"},
     },
+}
 
-    # Сценарий 4: Инженер 2 (Двигатель В) - Новый датчик вибрации
-    "ENG_B_ENG_C_VIBRO": {
-        "sensor_id": "SNSR-003", 
-        "sensor_type": "Датчик вибрации",
-        "role": "engineer",
-        "wsection": "Цех №2",
-        "asset": "Станок ЧПУ",         # Другой объект в том же цехе
-        "params": {"mean": 0.8, "std_dev": 0.15, "unit": "мм/с"},
-    },
-    
-    # Сценарий 5: Ученый (Поле А) - Температура
-    "SCI_A_FIELD_A_TEMP": {
-        "sensor_id": "SNSR-011",
-        "sensor_type": "Датчик температуры",
-        "role": "scientist",
-        "wsection": "Поле А",
-        "asset": "Почва",             # Объект для ученого
-        "type": "temperature",
-        "params": {"mean": 15.0, "std_dev": 1.5, "unit": "°C"},
-    },
-    
-    # Сценарий 6: Ученый (Поле Г) - Новая локация
-    "SCI_A_FIELD_G_LIGHT": {
-        "sensor_id": "SNSR-022",
-        "sensor_type": "Датчик освещенности",
-        "role": "scientist",
-        "wsection": "Поле Г",
-        "type": "Датчик света",
-        "params": {"mean": 80000, "std_dev": 5000, "unit": "Люкс"},
-        },
-    }
-
-
+# --- ФУНКЦИИ ---
 
 def get_simulated_value(mean, std_dev):
-    # Используем стандартное нормальное распределение для реалистичности
     return round(random.gauss(mean, std_dev), 2)
 
 def generate_and_store_data(scenarios):
     current_time = datetime.utcnow()
     
+    history_bulk_ops = []
+    current_bulk_ops = []
+
     for scenario_key, config in scenarios.items():
         params = config['params']
-        
-        # 1. Генерируем значение
         new_value = get_simulated_value(params['mean'], params['std_dev'])
 
-        #  1. Запись в Коллекцию Истории 
+        # 1. Запись в Коллекцию Истории
         history_record = {
+            "_id": uuid.uuid4(),  # Генерация нового UUID для каждой записи истории
             "sensor_id": config['sensor_id'],
             "timestamp": current_time,
             "sensor_type": config['sensor_type'],
-            "value": new_value,
+            "historicalvalue": new_value,
             "unit": params['unit'],
-            "role": config['role'],       # Роль привязывается к записи
-            "wsection": config['wsection'], # Секция привязывается к записи
+            "role": config['role'],       
+            "wsection": config['wsection'], # СОХРАНЯЕМ КОНТЕКСТ
+            "asset": config['asset'],       # СОХРАНЯЕМ КОНТЕКСТ
         }
-        COLLECTION_HISTORY.insert_one(history_record)
+        history_bulk_ops.append(UpdateOne(
+            {"_id": history_record["_id"]}, # Используем сгенерированный UUID как _id
+            {"$set": history_record},
+            upsert=True
+        ))
 
-        # --- 2. Запись/Обновление в Коллекцию Текущего Состояния ---
+        # 2. Запись/Обновление в Коллекцию Текущего Состояния
         current_record = {
             "sensor_id": config['sensor_id'],
             "value": new_value,
@@ -126,18 +101,28 @@ def generate_and_store_data(scenarios):
             "last_updated": current_time,
             "role": config['role'],
             "wsection": config['wsection'],
+            "asset": config['asset'],
             "sensor_type": config['sensor_type'],
+
         }
         
-        COLLECTION_CURRENT.update_one(
-            {"sensor_id": config['sensor_id']},
+        current_bulk_ops.append(UpdateOne(
+            {"sensor_id": config['sensor_id']}, 
             {"$set": current_record},
             upsert=True
-        )
+        ))
+
+    if history_bulk_ops:
+        db[COLLECTION_HISTORY].bulk_write(history_bulk_ops, ordered=False)
+    if current_bulk_ops:
+        db[COLLECTION_CURRENT].bulk_write(current_bulk_ops, ordered=False)
+        
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Stored data for {len(scenarios)} scenarios.")
 
 
 if __name__ == "__main__":
+    print("Starting hierarchical data simulation...")
     while True:
         generate_and_store_data(SIMULATION_SCENARIOS)
-        time.sleep(10) # Обновляем все данные каждые 10 секунд
+        time.sleep(10)
 
