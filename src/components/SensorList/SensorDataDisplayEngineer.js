@@ -1,30 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
-import { API_BASE_URL } from '../../services/api' // Assuming you have an API base URL
+import { API_BASE_URL } from '../../services/api' // Убедитесь, что путь правильный
 import AlertValue from '../AlertList/AlertList'
 import '../SensorList/SensorList.css'
 
 function SensorDataDisplayEngineer() {
-  // sensorData: Полный массив данных (используется для метаданных ошибок и деталей при раскрытии)
+  // sensorData: Полный массив данных (используется для хранения всех полученных данных, в т.ч. для деталей при раскрытии)
   const [sensorData, setSensorData] = useState([])
-  // groupedData: Сгруппированные данные (Цех -> Актив -> Список датчиков)
+  // groupedData: Сгруппированные данные (Цех -> Актив -> Список датчиков), отображает ЛИШЬ ПОСЛЕДНЕЕ значение
   const [groupedData, setGroupedData] = useState({})
-  // expandedItems: Управляет раскрытием Asset И Sensor Details, используя вложенную структуру
+  // expandedItems: Управляет раскрытием Asset (объектов) и Sensor Details (деталей датчиков)
   const [expandedItems, setExpandedItems] = useState({})
-  const [isLoading, setLoading] = useState(true)
+  const [isLoading, setLoading] = useState(true) // Флаг загрузки для первоначальной загрузки
   const [error, setError] = useState('')
 
-  // --- ПОРОГИ ---
+  // --- ПОРОГИ ДЛЯ ОПОВЕЩЕНИЙ ---
   const temperatureThreshold = 45
   const humidityThreshold = 65
   const minPascalThreshold = 0.7
   const maxPascalThreshold = 3.5
-  // ----------------
+  // -----------------------------
 
-  // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (Проверки состояния) ---
+  // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (для проверки ошибок и сообщений) ---
 
+  // Функция проверки, имеет ли датчик ошибку
   const checkSensorError = useCallback(
     (sensor) => {
+      // Строгая защита от некорректных данных
       if (!sensor || !sensor.sensor_type || typeof sensor.sensor_type !== 'string' || sensor.value === undefined) {
         return false
       }
@@ -42,6 +44,7 @@ function SensorDataDisplayEngineer() {
     [temperatureThreshold, humidityThreshold, minPascalThreshold, maxPascalThreshold],
   )
 
+  // Функция получения сообщения об ошибке
   const getAlertMessage = useCallback(
     (sensor) => {
       if (!sensor || !sensor.sensor_type || sensor.value === undefined) return ''
@@ -61,6 +64,7 @@ function SensorDataDisplayEngineer() {
     [temperatureThreshold, humidityThreshold, minPascalThreshold, maxPascalThreshold],
   )
 
+  // Функция получения порогов для отображения в AlertValue
   const getAlertThresholdForAlertValue = useCallback(
     (sensor) => {
       if (!sensor || !sensor.sensor_type) return 200
@@ -75,14 +79,15 @@ function SensorDataDisplayEngineer() {
     [temperatureThreshold, humidityThreshold, minPascalThreshold, maxPascalThreshold],
   )
 
-  // --- ФУНКЦИЯ ГРУППИРОВКИ (Остается прежней) ---
+  // --- ФУНКЦИЯ ГРУППИРОВКИ ДАННЫХ ---
+  // Группирует данные по Цеху -> Активу. Предполагается, что dataArray содержит уже ЛИШНИЕ показания (если бэкенд не дублирует).
   const groupDataByAsset = (dataArray) => {
     const grouped = {}
     dataArray.forEach((sensor) => {
       const section = sensor.wsection
       const asset = sensor.asset
 
-      if (!section || !asset) return
+      if (!section || !asset) return // Пропускаем записи без цеха или объекта
 
       if (!grouped[section]) grouped[section] = {}
       if (!grouped[section][asset]) grouped[section][asset] = []
@@ -92,13 +97,13 @@ function SensorDataDisplayEngineer() {
     return grouped
   }
 
-  // --- ОБНОВЛЕННЫЙ ОБРАБОТЧИК РАСКРЫТИЯ (Единый для Asset и Sensor) ---
+  // --- ЕДИНЫЙ ОБРАБОТЧИК РАСКРЫТИЯ (для Asset и Sensor Details) ---
   const toggleItemExpand = (level, sectionName, assetName, sensorId) => {
     setExpandedItems((prev) => {
       const newPrev = { ...prev }
 
       if (level === 'ASSET') {
-        // Раскрытие/Скрытие Объекта
+        // Раскрытие/Скрытие Объекта (Asset)
         newPrev[sectionName] = {
           ...newPrev[sectionName],
           [assetName]: !newPrev[sectionName]?.[assetName],
@@ -117,53 +122,96 @@ function SensorDataDisplayEngineer() {
     })
   }
 
-  // --- ЗАГРУЗКА ДАННЫХ ---
-  useEffect(() => {
-    const fetchSensorData = async () => {
-      setLoading(true)
-      setError('')
-      try {
-        const token = localStorage.getItem('token')
-        if (!token) throw new Error('Token missing')
+  // --- ЗАГРУЗКА ДАННЫХ С POLLING ---
 
-        const response = await axios.get(`${API_BASE_URL}/sensor-data`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+  // useCallback используется для мемоизации функции, чтобы избежать ее пересоздания
+  // при каждом рендере, что важно для useEffect с интервалом.
+  const fetchSensorData = useCallback(async () => {
+    // Если это первая загрузка, мы хотим показать индикатор загрузки.
+    // Для последующих обновлений, индикатор не нужен, чтобы не мигать интерфейсом.
+    const isInitialLoad = isLoading
+    if (!isInitialLoad) {
+      // Можно показать индикатор загрузки или просто ничего не делать,
+      // чтобы обновление было плавным.
+      // setLoading(true); // Раскомментируйте, если хотите видеть индикатор обновления
+    }
 
-        // Фильтруем на основе полей, которые должны быть в 'current_data'
-        const initialData = response.data.filter(
-          (data) => data && data.sensor_type && data.wsection && data.asset && data.value !== undefined,
-        )
+    setError('') // Сбрасываем ошибку при каждой попытке получения данных
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) throw new Error('Authentication token is missing')
 
-        // Добавляем флаги ошибок и isExpanded (для деталей).
-        // isExpanded по умолчанию false, т.к. детали не раскрыты.
-        const dataWithErrorFlags = initialData.map((data) => ({
-          ...data,
-          isExpanded: false,
-          hasError: checkSensorError(data),
-        }))
+      // *** ВАЖНО: Убедитесь, что ваш Node.js API на /sensor-data
+      // *** возвращает данные из нужной коллекции (current_data)
+      const response = await axios.get(`${API_BASE_URL}/sensor-data`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
 
-        setSensorData(dataWithErrorFlags) // Полный список (для поиска деталей при раскрытии)
+      // 1. Фильтрация данных: удаляем записи без нужных полей
+      const initialData = response.data.filter(
+        (data) => data && data.sensor_type && data.wsection && data.asset && data.value !== undefined,
+      )
 
-        // Группируем (если бэкенд вернул несколько одинаковых записей, они попадут в массив)
-        const groups = groupDataByAsset(dataWithErrorFlags)
-        setGroupedData(groups)
-      } catch (err) {
-        setError(err.response?.data?.message || 'Failed to fetch sensor data')
-        console.error('Error fetching sensor data:', err)
-      } finally {
+      // 2. Добавляем флаги ошибок и состояние раскрытия деталей (isExpanded)
+      // isExpanded сбрасывается при каждом обновлении, если оно не управляется глобально.
+      // В этой реализации, isExpanded управляется в expandedItems.
+      const dataWithErrorFlags = initialData.map((data) => ({
+        ...data,
+        isExpanded: false, // Флаг isExpanded теперь будет браться из expandedItems
+        hasError: checkSensorError(data),
+      }))
+
+      setSensorData(dataWithErrorFlags) // Сохраняем полный набор данных (для истории/деталей)
+
+      // 3. Группируем данные по Цеху -> Активу
+      // Предполагается, что ваш API возвращает только последние значения,
+      // поэтому здесь нет шага сжатия (getLatestReadings).
+      const groups = groupDataByAsset(dataWithErrorFlags)
+      setGroupedData(groups)
+    } catch (err) {
+      // Ловим ошибки сети или ответа сервера
+      setError(err.response?.data?.message || 'Failed to fetch sensor data')
+      console.error('Error fetching sensor data:', err)
+    } finally {
+      // Если это была первая загрузка, скрываем индикатор загрузки
+      if (isInitialLoad) {
+        setLoading(false)
+      } else {
+        // Если это было обновление, скрываем индикатор обновления (если он показывался)
         setLoading(false)
       }
     }
+  }, [isLoading, checkSensorError]) // Зависимости: isLoading, checkSensorError
 
+  // --- Настройка Polling (Периодическое обновление) ---
+  useEffect(() => {
+    // 1. Выполняем первый запрос сразу после монтирования компонента
     fetchSensorData()
-  }, [])
 
-  // --- РЕНДЕРИНГ ---
+    // 2. Настраиваем интервал для периодического опроса
+    const intervalId = setInterval(() => {
+      console.log('Polling for new data...') // Для отладки
+      fetchSensorData()
+    }, 5000) // Интервал обновления: 5000 миллисекунд = 5 секунд
 
-  if (isLoading) return <p>Loading sensor data...</p>
-  if (error) return <p style={{ color: 'red' }}>Error: {error}</p>
+    // 3. Очистка интервала при размонтировании компонента
+    // Это предотвращает утечку памяти и выполнение запросов после удаления компонента
+    return () => clearInterval(intervalId)
+  }, [fetchSensorData]) // fetchSensorData обновляется только при изменении isLoading или checkSensorError
 
+  // --- РЕНДЕРИНГ КОМПОНЕНТА ---
+
+  // Показываем индикатор загрузки только при первой загрузке
+  if (isLoading && Object.keys(groupedData).length === 0) {
+    return <p>Loading sensor data...</p>
+  }
+
+  // Если произошла ошибка
+  if (error) {
+    return <p style={{ color: 'red' }}>Error: {error}</p>
+  }
+
+  // Основной рендеринг данных
   return (
     <div className='flex_sensor_container'>
       <div className='sensor_container'>
@@ -173,6 +221,7 @@ function SensorDataDisplayEngineer() {
           </h2>
         </div>
         <div>
+          {/* Проверяем, есть ли данные для отображения */}
           {Object.keys(groupedData).length > 0 ? (
             <div className='hierarchical-dashboard'>
               {/* Итерация по ЦЕХАМ (WSection) */}
@@ -188,44 +237,53 @@ function SensorDataDisplayEngineer() {
                     Цех: {sectionName}
                   </h3>
 
-                  {/* Итерация по ОБЪЕКТАМ/АСCЕТАМ */}
+                  {/* Итерация по ОБЪЕКТАМ/АСCЕТАМ внутри Цеха */}
                   {Object.keys(groupedData[sectionName]).map((assetName) => (
                     <div
                       key={assetName}
                       className='asset-block'
                     >
+                      {/* Заголовок Объекта (Asset) */}
                       <div
                         className='asset-header'
                         onClick={() => toggleItemExpand('ASSET', sectionName, assetName, null)}
                         style={{ cursor: 'pointer' }}
                       >
                         <h4>Объект: {assetName}</h4>
+                        {/* Иконка раскрытия/свертывания */}
                         <span className={`arrow ${expandedItems[sectionName]?.[assetName] ? 'up' : 'down'}`}></span>
                       </div>
 
-                      {/* Раскрытие Объекта (Asset) */}
+                      {/* Контент Объекта (Asset), если он раскрыт */}
                       {expandedItems[sectionName]?.[assetName] && (
                         <div className='sensor-list-container'>
+                          {/* Итерация по ДАТЧИКАМ (последние показания для этого объекта) */}
                           {groupedData[sectionName][assetName].map((data) => {
+                            // Получаем сообщения и пороги для текущего датчика
                             const alertMessage = getAlertMessage(data)
                             const alertThresholdOrRange = getAlertThresholdForAlertValue(data)
 
-                            // Получаем состояние раскрытия деталей из нового стейта (expandedItems)
+                            // Определяем, раскрыты ли детали этого датчика, основываясь на состоянии expandedItems
                             const isDetailExpanded = expandedItems[sectionName]?.[assetName]?.[data.sensor_id]
 
                             return (
                               <div
-                                key={data._id || data.sensor_id}
+                                // Уникальный ключ для каждого элемента датчика
+                                key={data.sensor_id + data.timestamp}
                                 className={`
                                                                     container_data
-                                                                    ${isDetailExpanded ? 'expanded' : ''}
-                                                                    ${data.hasError ? 'sensor-error' : ''}
+                                                                    ${
+                                                                      isDetailExpanded ? 'expanded' : ''
+                                                                    } {/* Класс для раскрытого состояния */}
+                                                                    ${
+                                                                      data.hasError ? 'sensor-error' : ''
+                                                                    } {/* Класс для ошибки */}
                                                                 `}
                               >
                                 <li className='sensor-item'>
+                                  {/* Заголовок Датчика (Sensor Header) */}
                                   <div
                                     className='sensor-header'
-                                    // Теперь переключаем детали датчика через toggleItemExpand
                                     onClick={() => toggleItemExpand('SENSOR', sectionName, assetName, data.sensor_id)}
                                   >
                                     <h1 className='title'>
@@ -233,6 +291,7 @@ function SensorDataDisplayEngineer() {
                                       <br></br>
                                       Тип: {data.sensor_type}
                                     </h1>
+                                    {/* Индикатор ошибки, если есть */}
                                     {data.hasError && (
                                       <span
                                         className='error-indicator'
@@ -241,15 +300,18 @@ function SensorDataDisplayEngineer() {
                                         !
                                       </span>
                                     )}
+                                    {/* Иконка раскрытия/свертывания деталей */}
                                     <span className={`arrow ${isDetailExpanded ? 'up' : 'down'}`}></span>
                                   </div>
 
+                                  {/* Детали Датчика (Sensor Details), если раскрыты */}
                                   {isDetailExpanded && (
                                     <div className='sensor-details'>
                                       Тип: {data.sensor_type.toLowerCase()}
                                       <br></br>
                                       <div className='data_info'>
-                                        Показатели:&nbsp;
+                                        Показатели:
+                                        {/* Компонент AlertValue для отображения показаний */}
                                         <AlertValue
                                           sensorType={data.sensor_type}
                                           value={data.value}
@@ -273,6 +335,7 @@ function SensorDataDisplayEngineer() {
               ))}
             </div>
           ) : (
+            // Сообщение, если данных нет
             <p>No sensor data available for your access level.</p>
           )}
         </div>
