@@ -15,9 +15,9 @@ function DashboardEngineer() {
   }, [])
 
   return (
-    <div>
-      <h2>Engineer Dashboard</h2>
-      <p>Welcome, {nameU || 'User'}! Here you can see your machine sensor data.</p>
+    <div className='MenuEng'>
+      <h2>Меню инженера</h2>
+      <p>Добро пожаловать, {nameU || 'User'}! Здесь вы можете увидеть показания датчиков вашего объекта.</p>
       <SensorDataDisplayEngineer />
     </div>
   )

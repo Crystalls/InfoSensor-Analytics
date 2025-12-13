@@ -26,24 +26,19 @@ function Navbar({ isLoggedIn, onLogout, title }) {
         <div className='links'>
           <ul>
             <li>
-              <Link to='/'>Home</Link>
+              <Link to='/'>Главная страница</Link>
             </li>
             <li>
-              <Link to='/'>Home</Link>
+              <Link to='/'>О нас</Link>
             </li>
-            <li>
-              <Link to='/'>Home</Link>
-            </li>
-            <li>
-              <Link to='/'>Home</Link>
-            </li>
-            <li>
-              <Link to='/'>Home</Link>
-            </li>
+
             {isLoggedIn && (
               <>
                 <li>
-                  <Link to='/dashboard'>Dashboard</Link>
+                  <Link to='/dashboard'>Приборы</Link>
+                </li>
+                <li>
+                  <Link to='/'>Аналитические графики</Link>
                 </li>
               </>
             )}

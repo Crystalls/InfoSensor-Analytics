@@ -18,48 +18,40 @@ const ASSET_REGISTRY = {
   'Поле А': ['Почва (Сектор 1)', 'Теплица 101'],
 }
 
-// MongoDB Connection
+// соединение с MongoDB
 const mongoUri = 'mongodb://127.0.0.1:27017/newdb'
 mongoose
   .connect(mongoUri)
   .then(() => console.log('Connected to MongoDB'))
   .catch((err) => console.error('MongoDB connection error:', err))
 
-// --- User Schema ---
+// Схема для коллекции пользователей
 const userSchema = new mongoose.Schema({
   userId: { type: String, unique: true, required: true, default: uuidv4 },
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   profession: { type: String, required: true },
-  wsection: { type: String, required: true }, // Рабочий цех пользователя
+  wsection: { type: String, required: true },
   nameU: { type: String, required: true },
-  // ВНИМАНИЕ: allowedSections и allowedAssets НЕ ХРАНИМ ЗДЕСЬ,
-  // они вычисляются при ЛОГИНЕ на основе ASSET_REGISTRY.
 })
 
 const User = mongoose.model('User', userSchema)
 
-// --- Sensor Data Schema (Обновленная для гибкости) ---
+// Схема для коллекции сенсоров
 const sensorReadingSchema = new mongoose.Schema(
   {
-    // Используем стандартный _id для MongoDB
-    sensor_id: { type: String, required: true }, // SNSR-001
+    sensor_id: { type: String, required: true },
     timestamp: { type: Date, default: Date.now },
     last_updated: { type: Date, default: Date.now },
-
-    // Контекст данных (Должно соответствовать данным, генерируемым Python)
-    sensor_type: { type: String, required: true }, // "Датчик температуры"
+    sensor_type: { type: String, required: true },
     role: { type: String, required: true },
-    wsection: { type: String, required: true }, // Цех
-    asset: { type: String, required: true }, // Объект
-
-    // Само показание
+    wsection: { type: String, required: true },
+    asset: { type: String, required: true },
     value: { type: Number, required: true },
     unit: { type: String, required: true },
-
-    type: { type: String, required: false }, // Опционально, но полезно
-    thresholds: { type: Object, required: false }, // Полезно для текущего состояния
+    type: { type: String, required: false },
+    thresholds: { type: Object, required: false },
   },
   { strict: false }, // Позволяет вставлять данные с полями, не указанными явно (например, из Python)
 )
@@ -103,7 +95,6 @@ app.post(
     check('profession', 'Профессия обязательна').notEmpty(),
     check('wsection', 'Рабочий цех обязателен').notEmpty(),
     check('nameU', 'Имя пользователя обязательна').notEmpty(),
-    // *** УДАЛЕНА ПРОВЕРКА allowedSections ***
   ],
   async (req, res) => {
     const errors = validationResult(req)
