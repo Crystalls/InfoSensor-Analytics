@@ -46,11 +46,8 @@ function App() {
     }, []); // Пустой массив зависимостей - выполняется один раз при старте
 
     // Функция логина, которая обновляет состояние App
-    const handleLogin = useCallback(async (loginIdentifier, password) => {
+    const handleLogin = useCallback(async (newToken, userData) => {
         try {
-            const response = await axios.post(`${API_BASE_URL}/login`, { loginIdentifier, password });
-            const { token: newToken, user: userData } = response.data;
-            
             localStorage.setItem('token', newToken);
             localStorage.setItem('user', JSON.stringify(userData));
             
@@ -58,7 +55,6 @@ function App() {
             setUser(userData);
             setToken(newToken);
             
-            return true; // Успешный логин
         } catch (error) {
             console.error("Login error:", error.response?.data?.message || error.message);
             throw error; // Возвращаем ошибку для обработки во фронтенде

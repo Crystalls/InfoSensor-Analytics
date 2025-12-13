@@ -144,7 +144,9 @@ app.post(
 // --- Login Endpoint (Где мы вычисляем права доступа) ---
 app.post('/login', async (req, res) => {
   const { loginIdentifier, password } = req.body
-
+  console.log('--- SERVER: Login Attempt ---')
+  console.log('Identifier SENT:', loginIdentifier)
+  console.log('Identifier TYPE:', typeof loginIdentifier)
   try {
     const user = await User.findOne({
       $or: [{ username: loginIdentifier }, { email: loginIdentifier }],
@@ -199,26 +201,36 @@ app.post('/login', async (req, res) => {
   }
 })
 
-// --- Authentication Middleware ---
 app.use((req, res, next) => {
+  // Проверяем, является ли роут публичным, и если да, пропускаем Middleware
+  if (req.path === '/login' || req.path === '/register') {
+    return next()
+  }
+
   const authHeader = req.headers.authorization
 
-  if (authHeader) {
-    const token = authHeader.split(' ')[1]
-
-    jwt.verify(token, jwtSecret, (err, user) => {
-      if (err) {
-        console.error('JWT verification error:', err)
-        return res.status(401).json({ message: 'Невалидный токен' })
-      }
-
-      console.log('JWT verified. User data in req.user:', user) // Проверяйте здесь access_rights
-      req.user = user
-      next()
-    })
-  } else {
-    return res.status(401).json({ message: 'Непредусмотренный токен' })
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Если нет заголовка Authorization (например, на /sensor-data при первом запросе без токена)
+    console.warn(`Unauthorized access attempt on path: ${req.path}`)
+    return res.status(401).json({ message: 'Токен авторизации отсутствует или имеет неверный формат.' })
   }
+
+  const token = authHeader.split(' ')[1] // Берем только сам токен
+
+  jwt.verify(token, jwtSecret, (err, userPayload) => {
+    if (err) {
+      console.error('JWT verification error:', err.message)
+      return res.status(401).json({ message: 'Невалидный или просроченный токен.' })
+    }
+
+    // ТОЛЬКО устанавливаем данные из токена в запрос
+    req.user = userPayload
+
+    // *** ВАЖНО: В этом месте НИКАКИХ вызовов User.findOne() или поиска по email! ***
+
+    console.log('JWT verified. User data in req.user:', userPayload)
+    next() // Передаем управление следующему Middleware или роуту
+  })
 })
 
 // POST /sensor-data - Вставка данных (ОСТОРОЖНО: эта конечная точка использует старую структуру!)
@@ -231,6 +243,8 @@ app.post('/sensor-data', async (req, res) => {
   res.status(405).send('POST endpoint for sensor-data is not fully configured for new structure.')
 })
 
+// GET /sensor-data - Получение данных (Использует новую логику иерархии)
+// GET /sensor-data (Получение данных)
 // GET /sensor-data - Получение данных (Использует новую логику иерархии)
 app.get('/sensor-data', async (req, res) => {
   try {

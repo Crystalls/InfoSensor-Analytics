@@ -15,6 +15,7 @@ function LoginForm({ onLogin }) {
     setError('')
 
     try {
+      console.log('Sending to /login:', { loginIdentifier, password })
       const response = await axios.post(`${API_BASE_URL}/login`, {
         // API Endpoint
         loginIdentifier: loginIdentifier,
@@ -27,13 +28,10 @@ function LoginForm({ onLogin }) {
         const { token, user } = response.data
 
         // Store user data
-        localStorage.setItem('token', token)
-        localStorage.setItem('username', user.username) // Store username
-        localStorage.setItem('nameU', user.nameU)
-        localStorage.setItem('user', JSON.stringify(user)) // Store all user data
+
         console.log('Login successful. Stored user:', user) // Add log
 
-        onLogin(user) //  Call onLogin function to update app state
+        onLogin(token, user) //  Call onLogin function to update app state
 
         navigate('/dashboard') //  Redirect to dashboard
       } else {
