@@ -1,4 +1,11 @@
 .MenuEng h2 {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
   text-align: center;
-  color: blue;
+}
+
+.leads {
+  font-size: 1.25rem;
+  text-align: center;
+  color: #ffffff;
 }

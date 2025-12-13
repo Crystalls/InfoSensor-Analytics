@@ -1,0 +1,112 @@
+.login-container {
+  max-width: 400px; /* Максимальная ширина контейнера */
+  margin: 50px auto; /* Центрирование по горизонтали и вертикали */
+  padding: 20px; /* Внутренние отступы */
+  background-color: #f9f9f9; /* Цвет фона формы */
+  border-radius: 8px; /* Скругление углов */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); /* Тень для формы */
+}
+
+.login-title {
+  text-align: center; /* Центрирование заголовка */
+  color: #333; /* Цвет заголовка */
+}
+
+.error-message {
+  color: red; /* Цвет сообщения об ошибке */
+  text-align: center; /* Центрирование сообщения об ошибке */
+  margin-bottom: 15px; /* Отступ снизу */
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column; /* Элементы в колонку */
+}
+
+.form-group {
+  margin-bottom: 15px; /* Отступ между группами полей */
+}
+
+label {
+  margin-bottom: 5px; /* Отступ между меткой и полем ввода */
+  color: #555; /* Цвет метки */
+}
+
+.form-input {
+  padding: 10px; /* Внутренние отступы для полей ввода */
+  border: 1px solid #ccc; /* Цвет границы полей ввода */
+  border-radius: 4px; /* Скругление углов полей ввода */
+  width: 100%; /* Поля ввода занимают всю ширину родителя */
+  box-sizing: border-box; /* Учитываем отступы в ширине элемента */
+}
+
+.form-input:focus {
+  border-color: #6fbf82; /* Цвет границы при фокусе */
+  outline: none; /* Убираем стандартное выделение */
+}
+
+.submit-button {
+  padding: 10px; /* Внутренние отступы для кнопки */
+  background-color: #268b3e; /* Цвет фона кнопки */
+  color: white; /* Цвет текста кнопки */
+  border: none; /* Убираем границу кнопки */
+  border-radius: 4px; /* Скругление углов кнопки */
+  cursor: pointer; /* Курсор при наведении */
+  transition: background-color 0.3s ease; /* Плавный переход цвета фона */
+}
+
+.submit-button:hover {
+  background-color: #5aa971; /* Цвет фона кнопки при наведении */
+}
+
+.buttons {
+  display: flex;
+  justify-content: space-between;
+}
+
+.forgot-button {
+  padding: 10px; /* Внутренние отступы для кнопки */
+  background-color: #4d948e; /* Цвет фона кнопки */
+  color: white; /* Цвет текста кнопки */
+  border: none; /* Убираем границу кнопки */
+  border-radius: 4px; /* Скругление углов кнопки */
+  cursor: pointer; /* Курсор при наведении */
+  transition: background-color 0.3s ease; /* Плавный переход цвета фона */
+}
+
+.forgot-button:hover {
+  background-color: #7ec2bc; /* Цвет фона кнопки при наведении */
+  color: black;
+}
+
+.submit-button:active {
+  animation: submit-glow 2s infinite;
+}
+
+@keyframes submit-glow {
+  0% {
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+  }
+}
+
+.forgot-button:active {
+  animation: forgot-glow 2s infinite;
+}
+
+@keyframes forgot-glow {
+  0% {
+    box-shadow: 0 0 5px rgba(0, 217, 255, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 217, 255, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(0, 217, 255, 0.7);
+  }
+}

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios' // Import axios
 import { API_BASE_URL } from '../../services/api.js' // Assuming you have an API base URL
+import './Login.css'
 
 function LoginForm({ onLogin }) {
   //  Receive onLogin function
@@ -31,9 +32,13 @@ function LoginForm({ onLogin }) {
 
         console.log('Login successful. Stored user:', user) // Add log
 
-        onLogin(token, user) //  Call onLogin function to update app state
+        user?.profession === 'engineer' && onLogin(token, user) //  Call onLogin function to update app state
 
-        navigate('/dashboard') //  Redirect to dashboard
+        navigate('/dashboard-engineer') //  Redirect to dashboard
+
+        user?.profession === 'scientist' && onLogin(token, user) //  Call onLogin function to update app state
+
+        navigate('/dashboard-scientist') //  Redirect to dashboard
       } else {
         setError(response.data.message || 'Login failed') // Handle error messages
       }
@@ -44,31 +49,46 @@ function LoginForm({ onLogin }) {
   }
 
   return (
-    <div>
-      <h2>Вход</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+    <div className='login-container'>
+      <h2 className='login-title'>Вход</h2>
+      {error && <p className='error-message'>{error}</p>}
       <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor='username'>Логин или почта:</label>
-          <input
-            type='text'
-            id='loginIdentifier'
-            value={loginIdentifier}
-            onChange={(e) => setLoginIdentifier(e.target.value)}
-            required
-          />
+        <div className='login-form'>
+          <div className='form-group'>
+            <label htmlFor='username'>Логин или почта:</label>
+            <input
+              className='form-input'
+              type='text'
+              id='loginIdentifier'
+              value={loginIdentifier}
+              onChange={(e) => setLoginIdentifier(e.target.value)}
+              required
+            />
+            <label htmlFor='password'>Пароль:</label>
+            <input
+              className='form-input'
+              type='password'
+              id='password'
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
         </div>
-        <div>
-          <label htmlFor='password'>Пароль:</label>
-          <input
-            type='password'
-            id='password'
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+        <div className='buttons'>
+          <button
+            type='submit'
+            className='submit-button'
+          >
+            Войти
+          </button>
+          <button
+            type='submit'
+            className='forgot-button'
+          >
+            Забыли пароль?
+          </button>
         </div>
-        <button type='submit'>Войти</button>
       </form>
     </div>
   )

@@ -2,11 +2,15 @@ import React, { useState, useEffect, createContext, useContext, useCallback } fr
 import { BrowserRouter as Router, Route, Routes, Navigate, useNavigate } from 'react-router-dom';
 import RegistrationForm from './components/Registration/RegistrationForm';
 import LoginForm from './components/Login/LoginForm';
+import About from './components/AboutUs/AboutUs'
+import Home from './components/HomePage/HomePage';
 import DashboardScientist from './components/Dashboard/DashboardScientist';
 import DashboardEngineer from './components/Dashboard/DashboardEngineer';
 import Navbar from './components/Navbar/Navbar';
+import Footer from './components/Footer/Footer'
 import AssetRegistry from './components/Dashboard/AssetRegistry';
 import OverviewDashboard from './components/Dashboard/OverviewDashboard';
+import './App.css'
 import axios from 'axios';
 import { API_BASE_URL } from './services/api';
 
@@ -98,7 +102,7 @@ function App() {
             if (user.profession === 'engineer') {
                 return <Navigate to="/dashboard-engineer" replace />;
             } else if (user.profession === 'scientist') {
-                return <Navigate to="/dashboard" replace />;
+                return <Navigate to="/dashboard-scientist" replace />;
             } else {
                 // Если профессия неизвестна или не соответствует ни одному роуту
                 return <Navigate to="/login" replace />; // Или на страницу 404/Error
@@ -120,7 +124,7 @@ function App() {
 
             if (isLoggedIn) {
                 // Если залогинен, перенаправляем на дашборд
-                navigate('/dashboard', { replace: true });
+                navigate('/Home', { replace: true });
             } else {
                 // Если не залогинен, перенаправляем на логин
                 navigate('/login', { replace: true });
@@ -137,61 +141,64 @@ function App() {
 
     return (
         <Router>
-            <div>
+            <div className='App'>
                 {/* Navbar получает isLoggedIn User и handleLogout */}
                 <Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout} user={user} />
+                <div className='content'>
+                    <Routes>
+                        {/* Корневой роут, который перенаправляет в зависимости от статуса логина */}
+                        <Route path="/Home" element={<Home/>} /> 
 
-                <Routes>
-                    {/* Корневой роут, который перенаправляет в зависимости от статуса логина */}
-                    <Route path="/" element={<HomePage />} /> 
+                        <Route path="/register" element={<RegistrationForm />} />
+                        
+                        {/* LoginForm теперь получает handleLogin */}
+                        <Route path="/login" element={<LoginForm onLogin={handleLogin} />} /> 
+                        
+                        <Route
+                            path="/overview"
+                            element={
+                                <PrivateRoute>
+                                    <OverviewDashboard user={user} />
+                                </PrivateRoute>
+                            }
+                        />
+                        
+                        <Route
+                            path="/assets"
+                            element={
+                                <PrivateRoute>
+                                    <AssetRegistry user={user} token={token} />
+                                </PrivateRoute>
+                            }
+                        />
 
-                    <Route path="/register" element={<RegistrationForm />} />
-                    
-                    {/* LoginForm теперь получает handleLogin */}
-                    <Route path="/login" element={<LoginForm onLogin={handleLogin} />} /> 
-                    
-                    <Route
-                        path="/overview"
-                        element={
-                            <PrivateRoute>
-                                <OverviewDashboard user={user} />
-                            </PrivateRoute>
-                        }
-                    />
-                    
-                    <Route
-                        path="/assets"
-                        element={
-                            <PrivateRoute>
-                                <AssetRegistry user={user} token={token} />
-                            </PrivateRoute>
-                        }
-                    />
-
-                    {/* Защищенный роут для Дашборда Ученого */}
-                    <Route
-                        path="/dashboard-scientist"
-                        element={
-                            <PrivateRoute allowedProfession="scientist">
-                                <DashboardScientist />
-                            </PrivateRoute>
-                        }
-                    />
-                    
-                    {/* Защищенный роут для Дашборда Инженера */}
-                    <Route
-                        path="/dashboard-engineer"
-                        element={
-                            <PrivateRoute allowedProfession="engineer">
-                                <DashboardEngineer />
-                            </PrivateRoute>
-                        }
-                    />
-                    
-                    <Route path="*" element={<h1>404 - Not Found</h1>} />
-                </Routes>
-            </div>
-        </Router>
+                        {/* Защищенный роут для Дашборда Ученого */}
+                        <Route
+                            path="/dashboard-scientist"
+                            element={
+                                <PrivateRoute allowedProfession="scientist">
+                                    <DashboardScientist />
+                                </PrivateRoute>
+                            }
+                        />
+                        
+                        {/* Защищенный роут для Дашборда Инженера */}
+                        <Route
+                            path="/dashboard-engineer"
+                            element={
+                                <PrivateRoute allowedProfession="engineer">
+                                    <DashboardEngineer />
+                                </PrivateRoute>
+                            }
+                        />
+                        
+                        <Route path="*" element={<h1>404 - Not Found</h1>} />
+                        <Route path="/aboutUs" element={<About/>}/>
+                    </Routes>
+                    </div>
+            <Footer/>
+        </div>
+    </Router>
     );
 }
 

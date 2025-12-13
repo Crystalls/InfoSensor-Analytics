@@ -306,11 +306,11 @@ function SensorDataDisplayEngineer() {
                                         !
                                       </span>
                                     )}
-                                    {/* Иконка раскрытия/свертывания деталей */}
+                                    {/* Иконка раскрытия/скрытия деталей */}
                                     <span className={`arrow ${isDetailExpanded ? 'up' : 'down'}`}></span>
                                   </div>
 
-                                  {/* Детали Датчика (Sensor Details), если раскрыты */}
+                                  {/* Детали Датчика, если раскрыты */}
                                   {isDetailExpanded && (
                                     <div className='sensor-details'>
                                       Тип: {data.sensor_type.toLowerCase()}

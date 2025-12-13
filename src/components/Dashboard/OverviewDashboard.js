@@ -1,10 +1,9 @@
-// components/Dashboard/OverviewDashboard.jsx
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import { API_BASE_URL } from '../../services/api'
+import '../Dashboard/OverviewDashboard.css'
 
 const OverviewDashboard = ({ user, token }) => {
-  // Теперь принимает user и token
   const [stats, setStats] = useState({
     totalSensors: 0,
     activeAlerts: 0,

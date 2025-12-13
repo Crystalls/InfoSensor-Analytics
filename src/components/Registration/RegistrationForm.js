@@ -90,7 +90,7 @@ function RegistrationForm() {
     try {
       const response = await axios.post(`${API_BASE_URL}/register`, formData)
       setMessage('Регистрация прошла успешно!')
-      navigate('/dashboard')
+      navigate('/Home')
     } catch (err) {
       console.error('Registration error:', err)
       if (err.response) {
@@ -115,93 +115,95 @@ function RegistrationForm() {
   }
 
   return (
-    <div className='register'>
-      <h2>Регистрация</h2>
-      {message && <p style={{ color: 'green' }}>{message}</p>}
-      {errors.general && <p style={{ color: 'red' }}>{errors.general}</p>}
+    <div className='register-container'>
+      <h2 className='register-title'>Регистрация</h2>
+      {message && <p className='error-message'>{message}</p>}
+      {errors.general && <p className='error-message'>{errors.general}</p>}
       <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor='username'>Логин:</label>
-          <input
-            type='text'
-            id='username'
-            name='username'
-            value={formData.username}
-            onChange={handleChange}
-          />
-          {errors.username && <p style={{ color: 'red' }}>{errors.username}</p>}
-        </div>
-        <div>
-          <label htmlFor='email'>Email:</label>
-          <input
-            type='email'
-            id='email'
-            name='email'
-            value={formData.email}
-            onChange={handleChange}
-          />
-          {errors.email && <p style={{ color: 'red' }}>{errors.email}</p>}
-        </div>
-        <div>
-          <label htmlFor='password'>Пароль:</label>
-          <input
-            type='password'
-            id='password'
-            name='password'
-            value={formData.password}
-            onChange={handleChange}
-          />
-          {errors.password && <p style={{ color: 'red' }}>{errors.password}</p>}
-        </div>
-        <div>
-          <label htmlFor='confirmPassword'>Подтвердите Пароль:</label>
-          <input
-            type='password'
-            id='confirmPassword'
-            name='confirmPassword'
-            value={formData.confirmPassword}
-            onChange={handleChange}
-          />
-          {errors.confirmPassword && <p style={{ color: 'red' }}>{errors.confirmPassword}</p>}
-        </div>
-        <div>
-          <label htmlFor='profession'>Профессия:</label>
-          <select
-            id='profession'
-            name='profession'
-            value={formData.profession}
-            onChange={handleChange}
-          >
-            <option value=''>Выберите профессию</option>
-            <option value='scientist'>Ученый</option>
-            <option value='engineer'>Инженер</option>
-          </select>
-          {errors.profession && <p style={{ color: 'red' }}>{errors.profession}</p>}
-        </div>
-        <div>
-          <label htmlFor='wsection'>Рабочий участок:</label>
-          <input
-            type='text'
-            id='wsection'
-            name='wsection'
-            value={formData.wsection}
-            onChange={handleChange}
-          />
-          {errors.wsection && <p style={{ color: 'red' }}>{errors.wsection}</p>}
-        </div>
-        <div>
-          <label htmlFor='nameU'>Отображаемое имя:</label>
-          <input
-            type='text'
-            id='nameU'
-            name='nameU'
-            value={formData.nameU}
-            onChange={handleChange}
-          />
-          {errors.nameU && <p style={{ color: 'red' }}>{errors.nameU}</p>}
+        <div className='register-form'>
+          <div className='form-group'>
+            <label htmlFor='username'>Логин:</label>
+            <input
+              className='form-input'
+              type='text'
+              id='username'
+              name='username'
+              value={formData.username}
+              onChange={handleChange}
+            />
+            {errors.username && <p className='error-message'>{errors.username}</p>}
+            <label htmlFor='email'>Email:</label>
+            <input
+              className='form-input'
+              type='email'
+              id='email'
+              name='email'
+              value={formData.email}
+              onChange={handleChange}
+            />
+            {errors.email && <p className='error-message'>{errors.email}</p>}
+            <label htmlFor='password'>Пароль:</label>
+            <input
+              className='form-input'
+              type='password'
+              id='password'
+              name='password'
+              value={formData.password}
+              onChange={handleChange}
+            />
+            {errors.password && <p className='error-message'>{errors.password}</p>}
+            <label htmlFor='confirmPassword'>Подтвердите Пароль:</label>
+            <input
+              className='form-input'
+              type='password'
+              id='confirmPassword'
+              name='confirmPassword'
+              value={formData.confirmPassword}
+              onChange={handleChange}
+            />
+            {errors.confirmPassword && <p className='error-message'>{errors.confirmPassword}</p>}
+            <label htmlFor='profession'>Профессия:</label>
+            <select
+              className='form-input'
+              id='profession'
+              name='profession'
+              value={formData.profession}
+              onChange={handleChange}
+            >
+              <option value=''>Выберите профессию</option>
+              <option value='scientist'>Ученый</option>
+              <option value='engineer'>Инженер</option>
+            </select>
+            {errors.profession && <p className='error-message'>{errors.profession}</p>}
+            <label htmlFor='wsection'>Рабочий участок:</label>
+            <input
+              className='form-input'
+              type='text'
+              id='wsection'
+              name='wsection'
+              value={formData.wsection}
+              onChange={handleChange}
+            />
+            {errors.wsection && <p className='error-message'>{errors.wsection}</p>}
+            <label htmlFor='nameU'>Отображаемое имя:</label>
+            <input
+              className='form-input'
+              type='text'
+              id='nameU'
+              name='nameU'
+              value={formData.nameU}
+              onChange={handleChange}
+            />
+            {errors.nameU && <p className='error-message'>{errors.nameU}</p>}
+          </div>
         </div>
 
-        <button type='submit'>Зарегистрироваться</button>
+        <button
+          type='submit'
+          className='submit-button-register-glow'
+        >
+          Зарегистрироваться
+        </button>
       </form>
     </div>
   )

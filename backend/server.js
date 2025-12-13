@@ -290,13 +290,16 @@ app.get('/api/overview-stats', authenticateToken, async (req, res) => {
 
     // 2. Количество предупреждений.
     const activeAlerts = await SensorCurrentStateModel.countDocuments({
-      value: { $gt: 1 }, //
+      value: { $gt: 10 }, //
     })
 
     // 3. Время последнего обновления (наиболее свежий timestamp)
-    const latestReading = await SensorCurrentStateModel.findOne().sort({ timestamp: -1 }).select('timestamp').lean()
+    const latestReading = await SensorCurrentStateModel.findOne()
+      .sort({ last_updated: -1 })
+      .select('last_updated')
+      .lean()
 
-    const lastUpdated = latestReading ? latestReading.timestamp : null
+    const lastUpdated = latestReading ? latestReading.last_updated : null
 
     res.status(200).json({
       totalSensors,

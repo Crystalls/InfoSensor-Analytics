@@ -26,10 +26,10 @@ function Navbar({ isLoggedIn, onLogout, user }) {
         <div className='links'>
           <ul>
             <li>
-              <Link to='/'>Главная страница</Link>
+              <Link to='/Home'>Главная страница</Link>
             </li>
             <li>
-              <Link to='/'>О нас</Link>
+              <Link to='/aboutUs'>О нас</Link>
             </li>
 
             {isLoggedIn && (
@@ -62,10 +62,10 @@ function Navbar({ isLoggedIn, onLogout, user }) {
             {!isLoggedIn && (
               <>
                 <li>
-                  <Link to='/register'>Register</Link>
+                  <Link to='/register'>Зарегистрироваться</Link>
                 </li>
                 <li>
-                  <Link to='/login'>Login</Link>
+                  <Link to='/login'>Войти</Link>
                 </li>
               </>
             )}
@@ -77,7 +77,7 @@ function Navbar({ isLoggedIn, onLogout, user }) {
                     className='logout_btn'
                     onClick={handleLogout}
                   >
-                    Logout
+                    Выйти
                   </button>
                 </li>
               </>

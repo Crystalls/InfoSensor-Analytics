@@ -1,0 +1,42 @@
+.footer {
+  background-color: #333;
+  color: white;
+  padding: 20px;
+  text-align: center;
+}
+
+.footer-content {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  align-items: center;
+}
+
+.footer a {
+  color: #fff;
+  text-decoration: none;
+}
+
+li {
+  list-style: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+.social-media a {
+  margin: 0 10px;
+}
+
+.icon {
+  color: wheat;
+  width: 45px;
+  height: 45px;
+}
+
+.icon:hover {
+  color: rgb(255, 166, 0);
+  width: 45px;
+  height: 45px;
+  transition: 0.3s ease-in;
+}
