@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import '../Navbar/Navbar.css'
 import logo from '../../img/logo.png'
 
-function Navbar({ isLoggedIn, onLogout, title }) {
+function Navbar({ isLoggedIn, onLogout, user }) {
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -34,9 +34,22 @@ function Navbar({ isLoggedIn, onLogout, title }) {
 
             {isLoggedIn && (
               <>
+                {/* Общий обзор */}
                 <li>
-                  <Link to='/dashboard'>Приборы</Link>
+                  <Link to='/overview'>Обзор Системы</Link>
                 </li>
+                {/* ДИНАМИЧЕСКАЯ НАВИГАЦИЯ ПО РОЛИ */}
+                {user?.profession === 'engineer' && (
+                  <li>
+                    <Link to='/dashboard-engineer'>Обзорная панель инженера</Link>
+                  </li>
+                )}
+
+                {user?.profession === 'scientist' && (
+                  <li>
+                    <Link to='/dashboard-scientist'>Обзорная панель ученого</Link>
+                  </li>
+                )}
                 <li>
                   <Link to='/'>Аналитические графики</Link>
                 </li>
@@ -58,6 +71,7 @@ function Navbar({ isLoggedIn, onLogout, title }) {
             )}
             {isLoggedIn && (
               <>
+                <li style={{ marginRight: '15px', color: 'white' }}>{user?.nameU}</li>
                 <li>
                   <button
                     className='logout_btn'

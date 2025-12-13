@@ -77,6 +77,19 @@ const validatePassword = (password) => {
   return errors
 }
 
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+
+  if (token == null) return res.sendStatus(401) // Нет токена
+
+  jwt.verify(token, jwtSecret, (err, user) => {
+    if (err) return res.sendStatus(403) // <-- Если токен неверный, сервер возвращает 403
+    req.user = user
+    next()
+  })
+}
+
 // --- Регистрация ---
 app.post(
   '/register',
@@ -217,26 +230,12 @@ app.use((req, res, next) => {
     // ТОЛЬКО устанавливаем данные из токена в запрос
     req.user = userPayload
 
-    // *** ВАЖНО: В этом месте НИКАКИХ вызовов User.findOne() или поиска по email! ***
-
     console.log('JWT verified. User data in req.user:', userPayload)
     next() // Передаем управление следующему Middleware или роуту
   })
 })
 
-// POST /sensor-data - Вставка данных (ОСТОРОЖНО: эта конечная точка использует старую структуру!)
-// Если вы генерируете данные через Python, вам, вероятно, не понадобится этот POST,
-// или его нужно переписать под новую структуру.
-app.post('/sensor-data', async (req, res) => {
-  // ... (Ваш старый код вставки, который использует 'temperature' и 'humidity'
-  // Если вы используете Python для заполнения, эта конечная точка, вероятно, не нужна или должна быть переписана)
-  // ...
-  res.status(405).send('POST endpoint for sensor-data is not fully configured for new structure.')
-})
-
-// GET /sensor-data - Получение данных (Использует новую логику иерархии)
 // GET /sensor-data (Получение данных)
-// GET /sensor-data - Получение данных (Использует новую логику иерархии)
 app.get('/sensor-data', async (req, res) => {
   try {
     if (!req.user || !req.user.access_rights) {
@@ -266,6 +265,47 @@ app.get('/sensor-data', async (req, res) => {
   } catch (error) {
     console.error('*** SERVER CRASHED DURING SENSOR DATA FETCH ***', error)
     res.status(500).json({ message: 'Failed to retrieve sensor data' })
+  }
+})
+
+app.get('/api/assets', (req, res) => {
+  // Middleware уже проверил токен, поэтому req.user существует
+  if (!req.user || !req.user.access_rights) {
+    return res.status(403).json({ message: 'Доступ запрещен: нет прав доступа в токене.' })
+  }
+
+  // Возвращаем только то, что нужно для отображения справочника
+  const { allowedSections, allowedAssets } = req.user.access_rights
+
+  res.status(200).json({
+    allowedSections,
+    availableAssets: allowedAssets,
+  })
+})
+
+app.get('/api/overview-stats', authenticateToken, async (req, res) => {
+  try {
+    // 1. Общее количество сенсоров в коллекции текущих данных
+    const totalSensors = await SensorCurrentStateModel.countDocuments({})
+
+    // 2. Количество предупреждений.
+    const activeAlerts = await SensorCurrentStateModel.countDocuments({
+      value: { $gt: 1 }, //
+    })
+
+    // 3. Время последнего обновления (наиболее свежий timestamp)
+    const latestReading = await SensorCurrentStateModel.findOne().sort({ timestamp: -1 }).select('timestamp').lean()
+
+    const lastUpdated = latestReading ? latestReading.timestamp : null
+
+    res.status(200).json({
+      totalSensors,
+      activeAlerts,
+      lastUpdated,
+    })
+  } catch (error) {
+    console.error('Error fetching overview stats:', error)
+    res.status(500).json({ message: 'Не удалось получить сводную статистику.' })
   }
 })
 

@@ -5,8 +5,10 @@ import LoginForm from './components/Login/LoginForm';
 import DashboardScientist from './components/Dashboard/DashboardScientist';
 import DashboardEngineer from './components/Dashboard/DashboardEngineer';
 import Navbar from './components/Navbar/Navbar';
-import axios from 'axios'; // Импортируем axios
-import { API_BASE_URL } from './services/api'; // Предполагается, что у вас есть этот файл
+import AssetRegistry from './components/Dashboard/AssetRegistry';
+import OverviewDashboard from './components/Dashboard/OverviewDashboard';
+import axios from 'axios';
+import { API_BASE_URL } from './services/api';
 
 // --- КОМПОНЕНТ App ---
 function App() {
@@ -54,6 +56,7 @@ function App() {
             setIsLoggedIn(true);
             setUser(userData);
             setToken(newToken);
+            console.log('Token set in App:', newToken)
             
         } catch (error) {
             console.error("Login error:", error.response?.data?.message || error.message);
@@ -84,6 +87,10 @@ function App() {
             return <Navigate to="/login" replace />;
         }
 
+        if (!user || !token) { 
+            return <div>Загрузка данных сессии...</div>; 
+        }
+
         // Если роут требует конкретную профессию, а у пользователя ее нет
         if (allowedProfession && user && user.profession !== allowedProfession) {
             console.warn(`User ${user.username} does not have required profession: ${allowedProfession}`);
@@ -99,7 +106,9 @@ function App() {
         }
 
         // Если все проверки пройдены, рендерим дочерние элементы
-        return children;
+        const elementWithProps = React.cloneElement(children, { user, token });
+
+        return elementWithProps;
     };
 
     // --- Вспомогательный компонент для корневой страницы ---
@@ -129,8 +138,8 @@ function App() {
     return (
         <Router>
             <div>
-                {/* Navbar получает isLoggedIn и handleLogout */}
-                <Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout} />
+                {/* Navbar получает isLoggedIn User и handleLogout */}
+                <Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout} user={user} />
 
                 <Routes>
                     {/* Корневой роут, который перенаправляет в зависимости от статуса логина */}
@@ -141,9 +150,27 @@ function App() {
                     {/* LoginForm теперь получает handleLogin */}
                     <Route path="/login" element={<LoginForm onLogin={handleLogin} />} /> 
                     
+                    <Route
+                        path="/overview"
+                        element={
+                            <PrivateRoute>
+                                <OverviewDashboard user={user} />
+                            </PrivateRoute>
+                        }
+                    />
+                    
+                    <Route
+                        path="/assets"
+                        element={
+                            <PrivateRoute>
+                                <AssetRegistry user={user} token={token} />
+                            </PrivateRoute>
+                        }
+                    />
+
                     {/* Защищенный роут для Дашборда Ученого */}
                     <Route
-                        path="/dashboard"
+                        path="/dashboard-scientist"
                         element={
                             <PrivateRoute allowedProfession="scientist">
                                 <DashboardScientist />
