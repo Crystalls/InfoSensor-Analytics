@@ -209,12 +209,12 @@ function SensorDataDisplayEngineer() {
 
   // Показываем индикатор загрузки только при первой загрузке
   if (isLoading && Object.keys(groupedData).length === 0) {
-    return <p>Loading sensor data...</p>
+    return <p>Загрузка показаний датчиков...</p>
   }
 
   // Если произошла ошибка
   if (error) {
-    return <p style={{ color: 'red' }}>Error: {error}</p>
+    return <p style={{ color: 'red' }}>Ошибка: {error}</p>
   }
 
   // Основной рендеринг данных
@@ -223,7 +223,7 @@ function SensorDataDisplayEngineer() {
       <div className='sensor_container'>
         <div className='text_sensors'>
           <h2>
-            Sensor <br /> Data
+            Показания <br /> Датчиков
           </h2>
         </div>
         <div>
@@ -240,7 +240,7 @@ function SensorDataDisplayEngineer() {
                     onClick={() => toggleItemExpand('ASSET', sectionName, null)}
                     style={{ cursor: 'pointer' }}
                   >
-                    Цех: {sectionName}
+                    Рабочий сектор: {sectionName}
                   </h3>
 
                   {/* Итерация по ОБЪЕКТАМ/АСCЕТАМ внутри Цеха */}
@@ -342,7 +342,7 @@ function SensorDataDisplayEngineer() {
             </div>
           ) : (
             // Сообщение, если данных нет
-            <p>No sensor data available for your access level.</p>
+            <p>Нету данных датчиков доступных для вашего уровня доступа.</p>
           )}
         </div>
       </div>

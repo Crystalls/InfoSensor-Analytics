@@ -58,6 +58,35 @@ SIMULATION_SCENARIOS = {
         "type": "moisture",
         "params": {"mean": 45.0, "std_dev": 5.0, "unit": "%"},
     },
+        # --- Сценарий для Инженера (Цех №1) ---
+    "ENG_B_ENGINE_1_TEMP": {
+        "sensor_id": "SNSR-0231", 
+        "sensor_type": "Датчик температуры",
+        "role": "engineer",
+        "wsection": "Цех №1",        # Доступно инженеру в Цехе №2
+        "asset": "Насосная станция",      # Объект внутри Цеха №2
+        "type": "temperature",
+        "params": {"mean": 29.73, "std_dev": 1.0, "unit": "°C"},
+    },
+    "ENG_B_ENGINE_1_PRESSURE": {
+        "sensor_id": "SNSR-0202", 
+        "sensor_type": "Датчик давления",
+        "role": "engineer",
+        "wsection": "Цех №1",
+        "asset": "Токарный станок",      
+        "type": "pressure",
+        "params": {"mean": 3.0, "std_dev": 0.1, "unit": "Па",
+                   "thresholds": {"min": 2.5, "max": 4.0}},
+    },
+    "ENG_B_MACHINE_5_VIBRO": {
+        "sensor_id": "SNSR-01304", 
+        "sensor_type": "Датчик вибрации",
+        "role": "engineer",
+        "wsection": "Цех №1",
+        "asset": "Станок ЧПУ",         # Другой объект в Цехе №2
+        "type": "vibration",
+        "params": {"mean": 0.8, "std_dev": 0.15, "unit": "мм/с"},
+    },
 }
 
 # --- ФУНКЦИИ ---

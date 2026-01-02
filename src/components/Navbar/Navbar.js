@@ -37,6 +37,7 @@ function Navbar({ isLoggedIn, onLogout, user }) {
                 {/* Общий обзор */}
                 <li>
                   <Link to='/overview'>Обзор Системы</Link>
+                  <Link to='/assets'>Реестр Активов</Link>
                 </li>
                 {/* ДИНАМИЧЕСКАЯ НАВИГАЦИЯ ПО РОЛИ */}
                 {user?.profession === 'engineer' && (

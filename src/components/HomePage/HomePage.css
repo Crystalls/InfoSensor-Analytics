@@ -17,6 +17,10 @@ section {
   margin: 20px 0;
 }
 
+section h2 {
+  margin: 2% 0;
+}
+
 .footerinfo {
   margin-top: 40px;
   font-size: 0.9em;

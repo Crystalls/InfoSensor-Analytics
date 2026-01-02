@@ -83,12 +83,12 @@ function App() {
         
         // Если идет загрузка, показываем индикатор
         if (isLoadingAuth) {
-            return <div>Loading authentication...</div>;
+            return <div>Загрузка аутентификации...</div>;
         }
 
         // Если пользователь не залогинен или токен отсутствует, перенаправляем на логин
         if (!isLoggedIn || !token) {
-            return <Navigate to="/login" replace />;
+            return <Navigate to="/Home" replace />;
         }
 
         if (!user || !token) { 

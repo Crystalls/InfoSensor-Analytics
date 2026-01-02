@@ -16,6 +16,7 @@ app.use(express.json())
 const ASSET_REGISTRY = {
   'Цех №2': ['Двигатель 1', 'Станок 5', 'Насосная Станция'],
   'Поле А': ['Почва (Сектор 1)', 'Теплица 101'],
+  'Цех №1': ['Токарный станок', 'Станок ЧПУ', 'Паровой станок'],
 }
 
 // соединение с MongoDB
@@ -55,9 +56,45 @@ const sensorReadingSchema = new mongoose.Schema(
   },
   { strict: false }, // Позволяет вставлять данные с полями, не указанными явно (например, из Python)
 )
+/*
+const sensorReportsSchema = new mongoose.Schema(
+  {
+    report_name: { type: String, required: true },
+    generatedBy: { type: String, required: true },
+    report_type: { type: String, required: true },
+    generationDate: { type: Date, default: Date.now },
+    periodStart: { type: Date, default: Date.now },
+    periodEnd: { type: Date, default: Date.now },
+    fileUrl: { type: String },
+    parameters: { type: Object },
+  },
+)
+*/
+
+/*
+const sensorAlertsSchema = new mongoose.Schema(
+  {
+    sensor_id: { type: String, required: true },
+    alert_type: { type: String, required: true },
+    message: { type: String, required: true },
+    value: { type: Number, required: true },
+    timestamp: { type: Date, default: Date.now },
+    isRead: { type: Boolean },
+    resolvedby: { type: String },
+    resolvedAt: { type: Date, default: Date.now },
+  },
+)
+*/
 
 // Модель для Истории
 const SensorDataHistory = mongoose.model('SensorDataHistory', sensorReadingSchema, 'sensor_data_histories')
+/*
+ Модель для отчетов
+const sensorReportsSchema = mongoose.model('sensorReportsSchema', sensorReportsSchema, 'sensor_reports')
+
+// Модель для оповещений
+const sensorAlertsSchema = mongoose.model('sensorAlertsSchema', sensorAlertsSchema, 'sensor_alerts')
+*/
 
 // Модель для Текущего Состояния (Если вы используете отдельную коллекцию для текущих чтений)
 const SensorCurrentStateModel = mongoose.model('SensorCurrentState', sensorReadingSchema, 'sensor_current_data')
