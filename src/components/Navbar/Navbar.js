@@ -52,7 +52,7 @@ function Navbar({ isLoggedIn, onLogout, user }) {
                   </li>
                 )}
                 <li>
-                  <Link to='/'>Аналитические графики</Link>
+                  <Link to='/analytics'>Аналитические графики</Link>
                 </li>
               </>
             )}

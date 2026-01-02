@@ -19,16 +19,16 @@ COLLECTION_CURRENT = "sensor_current_data"
 
 SIMULATION_SCENARIOS = {
     # --- Сценарий для Инженера (Цех №2) ---
-    "ENG_B_ENGINE_1_TEMP": {
+    "ENG_WORKSHOP2_ENGINE_1_TEMP": {
         "sensor_id": "SNSR-001", 
         "sensor_type": "Датчик температуры",
         "role": "engineer",
         "wsection": "Цех №2",        # Доступно инженеру в Цехе №2
         "asset": "Двигатель 1",      # Объект внутри Цеха №2
         "type": "temperature",
-        "params": {"mean": 29.73, "std_dev": 1.0, "unit": "°C"},
+        "params": {"mean": 29.73, "std_dev": 6.0, "unit": "°C"},
     },
-    "ENG_B_ENGINE_1_PRESSURE": {
+    "ENG_WORKSHOP2_ENGINE_1_PRESSURE": {
         "sensor_id": "SNSR-002", 
         "sensor_type": "Датчик давления",
         "role": "engineer",
@@ -38,7 +38,7 @@ SIMULATION_SCENARIOS = {
         "params": {"mean": 3.0, "std_dev": 0.1, "unit": "Па",
                    "thresholds": {"min": 2.5, "max": 4.0}},
     },
-    "ENG_B_MACHINE_5_VIBRO": {
+    "ENG_WORKSHOP2_MACHINE_5_VIBRO": {
         "sensor_id": "SNSR-004", 
         "sensor_type": "Датчик вибрации",
         "role": "engineer",
@@ -59,7 +59,7 @@ SIMULATION_SCENARIOS = {
         "params": {"mean": 45.0, "std_dev": 5.0, "unit": "%"},
     },
         # --- Сценарий для Инженера (Цех №1) ---
-    "ENG_B_ENGINE_1_TEMP": {
+    "ENG_WORKSHOP1_PUMP_1_TEMP": {
         "sensor_id": "SNSR-0231", 
         "sensor_type": "Датчик температуры",
         "role": "engineer",
@@ -68,7 +68,7 @@ SIMULATION_SCENARIOS = {
         "type": "temperature",
         "params": {"mean": 29.73, "std_dev": 1.0, "unit": "°C"},
     },
-    "ENG_B_ENGINE_1_PRESSURE": {
+    "ENG_WORKSHOP1_TURNING MACHINE_1_PRESSURE": {
         "sensor_id": "SNSR-0202", 
         "sensor_type": "Датчик давления",
         "role": "engineer",
@@ -78,7 +78,7 @@ SIMULATION_SCENARIOS = {
         "params": {"mean": 3.0, "std_dev": 0.1, "unit": "Па",
                    "thresholds": {"min": 2.5, "max": 4.0}},
     },
-    "ENG_B_MACHINE_5_VIBRO": {
+    "ENG_WORKSHOP1_CNC_MACHINE_1_VIBRO": {
         "sensor_id": "SNSR-01304", 
         "sensor_type": "Датчик вибрации",
         "role": "engineer",
@@ -86,6 +86,15 @@ SIMULATION_SCENARIOS = {
         "asset": "Станок ЧПУ",         # Другой объект в Цехе №2
         "type": "vibration",
         "params": {"mean": 0.8, "std_dev": 0.15, "unit": "мм/с"},
+    },
+        "ENG_WORKSHOP2_LIQUID_1_": {
+        "sensor_id": "SNSR-01304", 
+        "sensor_type": "Датчик уровня жидкости",
+        "role": "engineer",
+        "wsection": "Цех №1",
+        "asset": "Станок 5",         # Другой объект в Цехе №2
+        "type": "luquid",
+        "params": {"mean": 890, "std_dev": 36, "unit": "мл"},
     },
 }
 

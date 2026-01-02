@@ -11,6 +11,7 @@ import Footer from './components/Footer/Footer'
 import AssetRegistry from './components/Dashboard/AssetRegistry';
 import OverviewDashboard from './components/Dashboard/OverviewDashboard';
 import AssetDetailView from './components/Dashboard/AssetDetailView'
+import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard';
 import './App.css'
 import axios from 'axios';
 import { API_BASE_URL } from './services/api';
@@ -199,6 +200,15 @@ function App() {
                             element={
                                 <PrivateRoute allowedProfession="engineer">
                                     <DashboardEngineer />
+                                </PrivateRoute>
+                            }
+                        />
+
+                        <Route
+                            path="/analytics"
+                            element={
+                                <PrivateRoute>
+                                    <AnalyticsDashboard />
                                 </PrivateRoute>
                             }
                         />

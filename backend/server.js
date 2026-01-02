@@ -660,6 +660,96 @@ app.get('/api/user-zone-summary', authenticateToken, async (req, res) => {
   }
 })
 
+app.get('/api/historical-data', authenticateToken, async (req, res) => {
+  const { asset, sensorId, startDate, endDate } = req.query
+  const { allowedAssets } = req.user.access_rights
+
+  if (!asset || !sensorId || !startDate || !endDate) {
+    return res.status(400).json({ message: 'Требуются параметры: asset, sensorId, startDate, endDate.' })
+  }
+
+  if (!allowedAssets || !allowedAssets.includes(asset)) {
+    return res.status(403).json({ message: 'У вас нет доступа к данным этого актива.' })
+  }
+
+  try {
+    // Используем Date объекты для корректного сравнения с полем типа Date в БД
+    const query = {
+      asset: asset,
+      sensor_id: sensorId,
+      timestamp: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate + 'T23:59:59.999Z'),
+      },
+    }
+
+    const data = await SensorDataHistory.find(query)
+      .select('timestamp historicalvalue') // <-- Используем timestamp и historicalvalue
+      .sort({ timestamp: 1 })
+      .lean()
+
+    const chartData = data.map((item) => ({
+      time: new Date(item.timestamp).toISOString(),
+      value: item.historicalvalue, // <-- Используем historicalvalue
+    }))
+
+    res.status(200).json({ chartData })
+  } catch (error) {
+    console.error('Error fetching historical data:', error)
+    res.status(500).json({ message: 'Ошибка сервера при получении исторических данных.' })
+  }
+})
+
+app.get('/api/config/sensor-options', authenticateToken, async (req, res) => {
+  const allowedAssets = req.user.access_rights?.allowedAssets
+
+  if (!allowedAssets || allowedAssets.length === 0) {
+    return res.status(200).json({ assetSensorMap: {} })
+  }
+
+  try {
+    // 1. Находим все уникальные пары (asset, sensor_id, sensor_type) для разрешенных активов
+    const distinctData = await SensorCurrentStateModel.aggregate([
+      { $match: { asset: { $in: allowedAssets } } },
+      {
+        $group: {
+          _id: {
+            asset: '$asset',
+            sensor_id: '$sensor_id',
+            sensor_type: '$sensor_type',
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          asset: '$_id.asset',
+          sensor_id: '$_id.sensor_id',
+          sensor_type: '$_id.sensor_type',
+        },
+      },
+    ])
+
+    // 2. Преобразуем результат в Map: { "Asset Name": [{id: "...", type: "..."}] }
+    const assetSensorMap = {}
+
+    distinctData.forEach((doc) => {
+      if (!assetSensorMap[doc.asset]) {
+        assetSensorMap[doc.asset] = []
+      }
+      assetSensorMap[doc.asset].push({
+        id: doc.sensor_id,
+        type: doc.sensor_type,
+      })
+    })
+
+    res.status(200).json({ assetSensorMap })
+  } catch (error) {
+    console.error('Error fetching sensor options:', error)
+    res.status(500).json({ message: 'Ошибка сервера при получении списка сенсоров.' })
+  }
+})
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`)
 })
