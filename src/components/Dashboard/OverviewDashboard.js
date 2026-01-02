@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import { API_BASE_URL } from '../../services/api'
 import '../Dashboard/OverviewDashboard.css'
+import ZoneSummary from './ZoneSummary'
 
 const OverviewDashboard = ({ user, token }) => {
   const [stats, setStats] = useState({
@@ -92,7 +93,7 @@ const OverviewDashboard = ({ user, token }) => {
       </div>
 
       <h2 className='mt-5'>Сводка по Вашим Зонам Ответственности</h2>
-      {/* Здесь вы можете вывести список цехов из user.access_rights.allowedSections */}
+      <ZoneSummary token={token} />
     </div>
   )
 }

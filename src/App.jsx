@@ -10,6 +10,7 @@ import Navbar from './components/Navbar/Navbar';
 import Footer from './components/Footer/Footer'
 import AssetRegistry from './components/Dashboard/AssetRegistry';
 import OverviewDashboard from './components/Dashboard/OverviewDashboard';
+import AssetDetailView from './components/Dashboard/AssetDetailView'
 import './App.css'
 import axios from 'axios';
 import { API_BASE_URL } from './services/api';
@@ -167,10 +168,20 @@ function App() {
                             path="/assets"
                             element={
                                 <PrivateRoute>
-                                    <AssetRegistry user={user} token={token} />
+                                    <AssetRegistry/>
                                 </PrivateRoute>
                             }
                         />
+
+                        <Route
+                            path="/assets/:assetName"
+                            element={
+                                <PrivateRoute >
+                                    <AssetDetailView user={user} token={token} />
+                                </PrivateRoute>
+                            }
+                        />
+                        
 
                         {/* Защищенный роут для Дашборда Ученого */}
                         <Route

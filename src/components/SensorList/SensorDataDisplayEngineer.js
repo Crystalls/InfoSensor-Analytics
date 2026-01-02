@@ -20,6 +20,7 @@ function SensorDataDisplayEngineer() {
   const minPascalThreshold = 0.7
   const maxPascalThreshold = 3.5
   const minCountThreshold = 600
+  const VabrationThreshold = 6.2
   // -----------------------------
 
   // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (для проверки ошибок и сообщений) ---
@@ -37,6 +38,8 @@ function SensorDataDisplayEngineer() {
         return sensor.value > temperatureThreshold
       } else if (lowerCaseType.includes('влажн')) {
         return sensor.value > humidityThreshold
+      } else if (lowerCaseType.includes('вибрац')) {
+        return sensor.value > VabrationThreshold
       } else if (lowerCaseType.includes('уровня')) {
         return sensor.value < minCountThreshold
       } else if (lowerCaseType.includes('давл')) {
@@ -44,7 +47,14 @@ function SensorDataDisplayEngineer() {
       }
       return false
     },
-    [temperatureThreshold, humidityThreshold, minPascalThreshold, maxPascalThreshold],
+    [
+      temperatureThreshold,
+      humidityThreshold,
+      minPascalThreshold,
+      maxPascalThreshold,
+      minCountThreshold,
+      VabrationThreshold,
+    ],
   )
 
   // Функция получения сообщения об ошибке
@@ -56,6 +66,8 @@ function SensorDataDisplayEngineer() {
 
       if (lowerCaseType.includes('температур') && value > temperatureThreshold)
         return `Превышены пороговые значения температуры (${temperatureThreshold} °C)`
+      if (lowerCaseType.includes('вибрац') && value > VabrationThreshold)
+        return `Превышены пороговые значения датчика вибрации (${VabrationThreshold} мм/сек)`
       if (lowerCaseType.includes('уровня') && value < minCountThreshold)
         return `Низкий уровень жидкости (${temperatureThreshold} мл)`
       if (lowerCaseType.includes('влажн') && value > humidityThreshold)
@@ -66,7 +78,14 @@ function SensorDataDisplayEngineer() {
       }
       return ''
     },
-    [temperatureThreshold, humidityThreshold, minPascalThreshold, maxPascalThreshold],
+    [
+      temperatureThreshold,
+      humidityThreshold,
+      minPascalThreshold,
+      maxPascalThreshold,
+      minCountThreshold,
+      VabrationThreshold,
+    ],
   )
 
   // Функция получения порогов для отображения в AlertValue
@@ -76,13 +95,21 @@ function SensorDataDisplayEngineer() {
       const lowerCaseType = sensor.sensor_type.toLowerCase()
       if (lowerCaseType.includes('температур')) return temperatureThreshold
       if (lowerCaseType.includes('уровня')) return minCountThreshold
+      if (lowerCaseType.includes('вибрац')) return VabrationThreshold
       if (lowerCaseType.includes('влажн')) return humidityThreshold
       if (lowerCaseType.includes('давл')) {
         return { min: minPascalThreshold, max: maxPascalThreshold }
       }
       return 200
     },
-    [temperatureThreshold, humidityThreshold, minPascalThreshold, maxPascalThreshold],
+    [
+      temperatureThreshold,
+      humidityThreshold,
+      minPascalThreshold,
+      maxPascalThreshold,
+      minCountThreshold,
+      VabrationThreshold,
+    ],
   )
 
   // --- ФУНКЦИЯ ГРУППИРОВКИ ДАННЫХ ---

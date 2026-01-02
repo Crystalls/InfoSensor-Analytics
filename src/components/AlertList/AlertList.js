@@ -62,6 +62,19 @@ function AlertValue({ sensorType, value, alertThreshold, alertMessage, unit }) {
     }
   }
 
+  if (lowerCaseType.includes('вибрац')) {
+    if (value > alertThreshold) {
+      isAlert = true
+      messageColor = 'red'
+      displayMessage = alertMessage
+        ? `${alertMessage}: ${value} ${unit}`
+        : `Превышены пороговые значения: -> ${value} ${unit}`
+    } else {
+      // Случай успеха для уровня
+      displayMessage = `${value} ${unit}`
+    }
+  }
+
   // Если isAlert === false, мы отображаем исходное или нормальное сообщение
   if (!isAlert) {
     // Если тип неизвестен ИЛИ тип известен, но нет тревоги

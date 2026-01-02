@@ -56,6 +56,20 @@ const sensorReadingSchema = new mongoose.Schema(
   },
   { strict: false }, // Позволяет вставлять данные с полями, не указанными явно (например, из Python)
 )
+
+const ThresholdConfigSchema = new mongoose.Schema(
+  {
+    asset: { type: String, required: true }, // Имя Актива (напр., "Токарный станок")
+    sensorId: { type: String, required: true }, // ID Сенсора (напр., "SNSR-0202")
+    threshold: { type: Number, required: true }, // Пороговое значение
+    sensor_type: { type: String, required: true },
+  },
+  { timestamps: true },
+)
+
+// Обеспечиваем уникальность пары Актив-Сенсор
+ThresholdConfigSchema.index({ asset: 1, sensorId: 1 }, { unique: true })
+
 /*
 const sensorReportsSchema = new mongoose.Schema(
   {
@@ -96,8 +110,11 @@ const sensorReportsSchema = mongoose.model('sensorReportsSchema', sensorReportsS
 const sensorAlertsSchema = mongoose.model('sensorAlertsSchema', sensorAlertsSchema, 'sensor_alerts')
 */
 
-// Модель для Текущего Состояния (Если вы используете отдельную коллекцию для текущих чтений)
+// Модель для Текущего Состояния
 const SensorCurrentStateModel = mongoose.model('SensorCurrentState', sensorReadingSchema, 'sensor_current_data')
+
+// Модель для конфигурирования пороговых значений
+const ThresholdConfigModel = mongoose.model('ThresholdConfig', ThresholdConfigSchema, 'threshold_config')
 
 const saltRounds = 10
 const jwtSecret = 'your-secret-key'
@@ -220,7 +237,7 @@ app.post('/login', async (req, res) => {
           },
         },
         jwtSecret,
-        { expiresIn: '1h' },
+        { expiresIn: '36h' },
       )
 
       res.status(200).json({
@@ -346,6 +363,300 @@ app.get('/api/overview-stats', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching overview stats:', error)
     res.status(500).json({ message: 'Не удалось получить сводную статистику.' })
+  }
+})
+
+// --- РОУТ СПИСКА (обновленный) ---
+app.get('/api/assets-with-live-data', authenticateToken, async (req, res) => {
+  if (!req.user || !req.user.access_rights || !req.user.access_rights.allowedAssets) {
+    return res.status(403).json({ message: 'Доступ запрещен: нет списка активов.' })
+  }
+
+  const allowedAssets = req.user.access_rights.allowedAssets
+  const userWorkshop = req.user.wsection
+
+  // 1. Находим последние показания для ВСЕХ доступных сенсоров, связанных с этими активами
+  // (Это может быть ресурсоемко, но соответствует структуре данных)
+  const currentStates = await SensorCurrentStateModel.find({ asset: { $in: allowedAssets } })
+    .sort({ last_updated: -1 })
+    .select('asset sensor_id value last_updated')
+    .lean()
+
+  // 2. Находим все конфигурации порогов для этих активов
+  const thresholdsMap = new Map()
+  const thresholdConfigs = await ThresholdConfigModel.find({ asset: { $in: allowedAssets } }).lean()
+
+  thresholdConfigs.forEach((config) => {
+    // Ключ: "ИмяАктива|SensorID"
+    thresholdsMap.set(`${config.asset}|${config.sensorId}`, config.threshold)
+  })
+
+  // 3. Группируем и агрегируем данные по Активам
+  const assetSummary = new Map()
+
+  currentStates.forEach((state) => {
+    const key = state.asset
+
+    // Если Актив еще не в итоговой карте, инициализируем его
+    if (!assetSummary.has(key)) {
+      assetSummary.set(key, {
+        name: key,
+        workshop: userWorkshop,
+        status: 'Активен', // Начальное состояние
+        statusColor: 'text-success',
+        lastValue: 'N/A',
+        lastTimestamp: 'N/A',
+        sensorCount: 0, // Для понимания, сколько сенсоров у актива
+        activeSensors: 0, // Для расчета общего статуса
+        alarmSensors: 0,
+      })
+    }
+
+    const summary = assetSummary.get(key)
+    summary.sensorCount++
+
+    const threshold = thresholdsMap.get(`${key}|${state.sensor_id}`)
+    const isAlarm = threshold && state.value > threshold
+
+    if (isAlarm) {
+      summary.alarmSensors++
+    }
+
+    // Обновляем сводные данные (берем самые свежие, хотя они уже отсортированы)
+    summary.lastValue = state.value.toFixed(2)
+    summary.lastTimestamp = new Date(state.last_updated).toLocaleTimeString()
+  })
+
+  // 4. Финальная обработка статуса
+  const results = Array.from(assetSummary.values()).map((summary) => {
+    if (summary.alarmSensors > 0) {
+      summary.status = 'Тревога'
+      summary.statusColor = 'text-danger'
+    } else if (summary.sensorCount === 0) {
+      summary.status = 'Нет данных'
+      summary.statusColor = 'text-secondary'
+    } else {
+      summary.status = 'Активен'
+      summary.statusColor = 'text-success'
+    }
+
+    // В сводке мы покажем последнее показание, которое мы нашли
+    return summary
+  })
+
+  res.status(200).json(results)
+})
+
+app.get('/api/assets/:assetName', authenticateToken, async (req, res) => {
+  const assetName = req.params.assetName
+  const { access_rights, wsection, nameU } = req.user
+
+  if (!access_rights || !access_rights.allowedAssets.includes(assetName)) {
+    return res.status(403).json({ message: `Доступ к активу ${assetName} запрещен.` })
+  }
+
+  try {
+    // 1. Находим пороги для этого актива
+    const thresholdConfigs = await ThresholdConfigModel.find({ asset: assetName }).lean()
+    const thresholdsMap = new Map(thresholdConfigs.map((c) => [c.sensorId, c.threshold]))
+
+    // 2. Находим показания для всех сенсоров этого актива
+    const currentStates = await SensorCurrentStateModel.find({ asset: assetName }).sort({ last_updated: -1 }).lean()
+
+    // 3. Агрегируем и обогащаем данные
+    const sensorDetailsPromises = currentStates.map(async (state) => {
+      const threshold = thresholdsMap.get(state.sensor_id)
+      const status = threshold && state.value > threshold ? 'Тревога' : 'ОК'
+      const statusColor = status === 'Тревога' ? 'text-danger' : 'text-success'
+
+      return {
+        type: state.sensor_type, // Берем тип из показаний
+        sensorId: state.sensor_id,
+        threshold: threshold || 'N/A',
+        currentValue: state.historicalvalue ? state.historicalvalue.toFixed(2) : 'Нет данных',
+        timestamp: new Date(state.last_updated).toLocaleTimeString(),
+        status: status,
+        statusColor: statusColor,
+      }
+    })
+
+    const sensorDetails = await Promise.all(sensorDetailsPromises)
+
+    // 4. Формируем финальный ответ
+    const overallStatus = sensorDetails.some((s) => s.status === 'Тревога') ? 'Тревога' : 'Активен'
+    const overallStatusColor = overallStatus === 'Тревога' ? 'text-danger' : 'text-success'
+
+    const responseData = {
+      name: assetName,
+      workshop: wsection,
+      responsibleEngineer: nameU,
+      status: overallStatus,
+      statusColor: overallStatusColor,
+      // Берем самое последнее показание для сводки
+      lastValue: sensorDetails[0]?.currentValue || 'N/A',
+      lastTimestamp: sensorDetails[0]?.timestamp || 'N/A',
+      sensors: sensorDetails,
+    }
+
+    res.status(200).json(responseData)
+  } catch (error) {
+    console.error('Error fetching asset details:', error)
+    res.status(500).json({ message: 'Ошибка сервера при получении деталей актива.' })
+  }
+})
+
+app.put('/api/config/asset/:assetName', authenticateToken, async (req, res) => {
+  const assetName = req.params.assetName
+  const newConfigs = req.body // Массив объектов { sensorId, threshold }
+
+  const { access_rights } = req.user
+
+  if (!access_rights || !access_rights.allowedAssets.includes(assetName)) {
+    return res.status(403).json({ message: `Инженер не имеет прав на изменение конфигурации актива ${assetName}.` })
+  }
+
+  try {
+    const operations = newConfigs.map((config) => ({
+      updateOne: {
+        // Фильтр: ищем по имени актива И ID сенсора
+        filter: { asset: assetName, sensorId: config.sensorId },
+        // Обновляем или вставляем (upsert: true)
+        update: {
+          $set: {
+            threshold: config.threshold,
+            asset: assetName,
+          },
+        },
+        upsert: true,
+      },
+    }))
+
+    const result = await ThresholdConfigModel.bulkWrite(operations)
+
+    console.log(
+      `Thresholds updated for ${assetName}: ${result.modifiedCount} modified, ${result.upsertedCount} upserted.`,
+    )
+    res.status(200).json({ message: 'Конфигурация порогов обновлена.' })
+  } catch (error) {
+    console.error('Error bulk updating thresholds:', error)
+    res.status(500).json({ message: 'Ошибка сервера при обновлении порогов.' })
+  }
+})
+
+app.put('/api/assets/:assetName', authenticateToken, async (req, res) => {
+  const assetName = req.params.assetName
+  const { workshop, responsibleEngineer } = req.body // Данные, которые приходят с фронтенда
+
+  const { access_rights } = req.user
+
+  // 1. Проверка прав: Только инженер может редактировать?
+  if (req.user.profession !== 'engineer') {
+    return res.status(403).json({ message: 'Редактирование метаданных активов разрешено только инженерам.' })
+  }
+
+  // 2. Проверка доступа к этому активу
+  if (!access_rights || !access_rights.allowedAssets.includes(assetName)) {
+    return res.status(403).json({ message: `У вас нет прав на изменение этого актива: ${assetName}.` })
+  }
+
+  try {
+    const updateFields = {}
+    if (workshop) updateFields.workshop = workshop
+    if (responsibleEngineer) updateFields.responsibleEngineer = responsibleEngineer
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ message: 'Нет полей для обновления.' })
+    }
+
+    const result = await AssetModel.updateOne({ name: assetName }, { $set: updateFields })
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: `Актив ${assetName} не найден.` })
+    }
+
+    res.status(200).json({ message: `Актив ${assetName} успешно обновлен.` })
+  } catch (error) {
+    console.error('Error updating asset metadata:', error)
+    res.status(500).json({ message: 'Ошибка сервера при обновлении метаданных актива.' })
+  }
+})
+
+app.get('/api/user-zone-summary', authenticateToken, async (req, res) => {
+  const allowedAssets = req.user.access_rights?.allowedAssets
+  const userWorkshop = req.user.wsection
+
+  if (!allowedAssets || allowedAssets.length === 0) {
+    // Если у пользователя нет разрешенных активов, возвращаем пустую сводку без ошибки 500
+    return res.status(200).json({ summary: [] })
+  }
+
+  try {
+    // 1. Находим последние показания для ВСЕХ разрешенных активов
+    // Используем last_updated, как вы указали
+    const currentStates = await SensorCurrentStateModel.find({ asset: { $in: allowedAssets } })
+      .sort({ last_updated: -1 }) // Сортируем по полю last_updated
+      .lean()
+
+    // 2. Находим конфигурации порогов для этих активов
+    const thresholdConfigs = await ThresholdConfigModel.find({ asset: { $in: allowedAssets } }).lean()
+
+    const thresholdsMap = new Map()
+    thresholdConfigs.forEach((config) => {
+      // Ключ: "ИмяАктива|SensorID"
+      thresholdsMap.set(`${config.asset}|${config.sensor_id}`, config.threshold)
+    })
+
+    // 3. Агрегируем данные по Активам
+    const assetSummary = new Map() // <-- ИСПРАВЛЕНО: Объявлено здесь
+
+    currentStates.forEach((state) => {
+      const assetName = state.asset
+
+      if (!assetSummary.has(assetName)) {
+        assetSummary.set(assetName, {
+          assetName: assetName,
+          workshop: userWorkshop,
+          totalSensors: 0,
+          alarmSensors: 0,
+          lastReading: state.historicalvalue ? state.historicalvalue.toFixed(2) : 'N/A',
+          lastUpdated: new Date(state.last_updated).toLocaleTimeString(),
+        })
+      }
+
+      const summary = assetSummary.get(assetName)
+      summary.totalSensors++
+
+      const threshold = thresholdsMap.get(`${assetName}|${state.sensor_id}`)
+
+      // Проверка на тревогу
+      if (threshold && state.value > threshold) {
+        summary.alarmSensors++
+      }
+
+      // Обновляем последнюю временную метку (самая последняя запись в currentStates будет самой свежей)
+      summary.lastReading = state.historicalvalue ? state.historicalvalue.toFixed(2) : 'N/A'
+      summary.lastUpdated = new Date(state.last_updated).toLocaleTimeString()
+    })
+
+    // 4. Финализируем статус для каждого актива
+    const summaryArray = Array.from(assetSummary.values()).map((summary) => {
+      if (summary.alarmSensors > 0) {
+        summary.status = 'ТРЕВОГА'
+        summary.statusColor = 'text-danger'
+      } else if (summary.totalSensors === 0) {
+        summary.status = 'Нет данных'
+        summary.statusColor = 'text-secondary'
+      } else {
+        summary.status = 'В норме'
+        summary.statusColor = 'text-success'
+      }
+      return summary
+    })
+
+    res.status(200).json({ summary: summaryArray })
+  } catch (error) {
+    console.error('Error fetching zone summary:', error)
+    res.status(500).json({ message: 'Не удалось получить сводку по зонам.' })
   }
 })
 
