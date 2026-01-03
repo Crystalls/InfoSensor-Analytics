@@ -802,6 +802,66 @@ app.get('/api/thresholds-by-type', authenticateToken, async (req, res) => {
   }
 })
 
+app.put('/api/config/thresholds-save', authenticateToken, async (req, res) => {
+  // Убедитесь, что только инженеры или администраторы имеют доступ
+  if (req.user.profession !== 'engineer' && req.user.profession !== 'admin') {
+    return res.status(403).json({ message: 'Доступ запрещен. Только инженеры могут менять настройки.' })
+  }
+
+  const updates = req.body // Получаем массив объектов для обновления
+
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return res.status(400).json({ message: 'Неверный формат данных.' })
+  }
+
+  const bulkOperations = updates
+    .map((item) => {
+      // Проверяем наличие ключевых полей
+      if (!item.sensor_type || item.min_value === undefined || item.max_value === undefined) {
+        console.warn('Skipping invalid threshold item:', item)
+        return null
+      }
+
+      // Операция "найти и обновить, или создать" (upsert)
+      return {
+        updateOne: {
+          // Ищем по sensor_type
+          filter: { sensor_type: item.sensor_type },
+          // Устанавливаем новые min/max значения
+          update: {
+            $set: {
+              min_value: item.min_value,
+              max_value: item.max_value,
+              updatedAt: new Date(),
+            },
+          },
+          upsert: true, // Если запись не найдена, она будет создана
+        },
+      }
+    })
+    .filter((op) => op !== null) // Отфильтровываем недействительные операции
+
+  if (bulkOperations.length === 0) {
+    return res.status(200).json({ message: 'Нет порогов для обновления.' })
+  }
+
+  try {
+    // Выполняем массовую запись в коллекцию threshold_by_type_config
+    const result = await ThresholdByTypeModel.bulkWrite(bulkOperations)
+
+    // ВАЖНО: После обновления threshold_by_type_config,
+    // данные на фронтенде будут автоматически обновлены при следующем Polling.
+
+    res.status(200).json({
+      message: 'Настройки порогов по типу успешно обновлены.',
+      details: result,
+    })
+  } catch (error) {
+    console.error('Error performing bulk update for thresholds:', error)
+    res.status(500).json({ message: 'Ошибка сервера при сохранении порогов.' })
+  }
+})
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`)
 })

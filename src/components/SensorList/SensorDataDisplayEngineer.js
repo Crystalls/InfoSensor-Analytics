@@ -74,8 +74,12 @@ function SensorDataDisplayEngineer() {
 
     // 1. ЛОГИКА ДЛЯ ДАВЛЕНИЯ (Требуется диапазон)
     if (lowerCaseType.includes('давл')) {
-      if (value < minThreshold) return `Давление ниже порогового значения (${minThreshold} Па)`
-      if (value > maxThreshold) return `Превышены пороговые значения давления (${maxThreshold} Па)`
+      if (value < minThreshold)
+        return `Давление ниже порогового значения (${minThreshold} ${sensor.unit || ''}) ${value} ${sensor.unit || ''}`
+      if (value > maxThreshold)
+        return `Превышены пороговые значения давления (${maxThreshold} ${sensor.unit || ''}) ${value} ${
+          sensor.unit || ''
+        }`
     }
 
     // 2. ЛОГИКА ДЛЯ ТЕМПЕРАТУРЫ, ВИБРАЦИИ (Только верхний предел)
@@ -84,12 +88,14 @@ function SensorDataDisplayEngineer() {
       lowerCaseType.includes('вибрац') ||
       lowerCaseType.includes('влажн')
     ) {
-      if (value > maxThreshold) return `Превышены пороговые значения (${maxThreshold} ${sensor.unit || ''})`
+      if (value > maxThreshold)
+        return `Превышены пороговые значения (${maxThreshold} ${sensor.unit || ''}) ${value} ${sensor.unit || ''}`
     }
 
     // 3. ЛОГИКА ДЛЯ УРОВНЯ (Только нижний предел)
     else if (lowerCaseType.includes('уровня')) {
-      if (value < minThreshold) return `Низкий уровень жидкости (${minThreshold} мл)`
+      if (value < minThreshold)
+        return `Низкий уровень жидкости (${minThreshold} ${sensor.unit || ''}) ${value} ${sensor.unit || ''}`
     }
 
     return '' // Нет тревоги

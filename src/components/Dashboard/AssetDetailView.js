@@ -12,7 +12,25 @@ const AssetDetailView = ({ token }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Новый стейт для хранения всех порогов по типу
+  const [thresholdsByTypeMap, setThresholdsByTypeMap] = useState({})
+
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
+
+  // 1. ФУНКЦИЯ ЗАГРУЗКИ ПОРОГОВ ПО ТИПУ
+  const fetchThresholdsByType = useCallback(async () => {
+    if (!token) return {}
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axios.get(`${API_BASE_URL}/api/thresholds-by-type`, config)
+      const map = response.data.thresholdMap || {}
+      setThresholdsByTypeMap(map)
+      return map
+    } catch (err) {
+      console.error('Error fetching thresholds by type:', err)
+      return {}
+    }
+  }, [token])
 
   const fetchDetails = useCallback(async () => {
     if (!token) {
@@ -21,13 +39,39 @@ const AssetDetailView = ({ token }) => {
       return
     }
 
+    setLoading(true)
+    setError(null)
+
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } }
 
-      // 1. Получаем детали актива (включая сводный статус и последнее чтение)
-      const response = await axios.get(`${API_BASE_URL}/api/assets/${assetName}`, config)
+      // Запускаем оба запроса параллельно
+      const [detailsResponse, thresholdsMap] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/assets/${assetName}`, config),
+        fetchThresholdsByType(), // Используем функцию для получения порогов
+      ])
 
-      setDetails(response.data)
+      const detailsData = detailsResponse.data
+
+      // 2. ОБЪЕДИНЯЕМ ДАННЫЕ СЕНСОРОВ И ПОРОГОВ
+      if (detailsData.sensors && Array.isArray(detailsData.sensors)) {
+        detailsData.sensors = detailsData.sensors.map((sensor) => {
+          const type = sensor.type
+          const thresholds = thresholdsMap[type]
+
+          if (thresholds) {
+            return {
+              ...sensor,
+              // Добавляем новые поля min/max для отображения и редактирования
+              min_value: thresholds.min_value,
+              max_value: thresholds.max_value,
+            }
+          }
+          return { ...sensor, min_value: 'N/A', max_value: 'N/A' } // Если порог не найден
+        })
+      }
+
+      setDetails(detailsData)
       setLoading(false)
     } catch (err) {
       console.error('Error fetching asset details:', err)
@@ -38,11 +82,14 @@ const AssetDetailView = ({ token }) => {
       }
       setLoading(false)
     }
-  }, [assetName, token])
+  }, [assetName, token, fetchThresholdsByType])
 
+  // Запускаем fetchDetails, который теперь сам вызывает fetchThresholdsByType
   useEffect(() => {
     fetchDetails()
   }, [fetchDetails])
+
+  // ... (Обработка loading/error/no details остается прежней) ...
 
   if (loading) return <div className='container mt-4'>Загрузка деталей актива "{assetName}"...</div>
   if (error)
@@ -70,6 +117,8 @@ const AssetDetailView = ({ token }) => {
       </button>
 
       <h1>Детали Актива: {details.name || assetName}</h1>
+
+      {/* ... (Общая Информация остается прежней) ... */}
 
       <div className='card mb-4'>
         <div className='card-header bg-primary text-white'>
@@ -103,8 +152,10 @@ const AssetDetailView = ({ token }) => {
                 key={index}
                 className='list-group-item d-flex justify-content-between align-items-center'
               >
-                {sensor.type} (ID: {sensor.sensorId})
-                <span className={`badge bg-secondary rounded-pill`}>Порог: {sensor.threshold}</span>
+                {sensor.type} (ID: {sensor.sensorId}){/* 3. ОТОБРАЖАЕМ НОВЫЕ ПОРОГИ (MIN - MAX) */}
+                <span className={`badge bg-secondary rounded-pill`}>
+                  Порог: {sensor.min_value} - {sensor.max_value}
+                </span>
               </li>
             ))}
         </ul>
@@ -124,10 +175,15 @@ const AssetDetailView = ({ token }) => {
         <ThresholdConfigEditor
           assetName={assetName}
           token={token}
+          // 4. ПЕРЕДАЕМ ОБНОВЛЕННЫЕ ДАННЫЕ В РЕДАКТОР
           initialConfigs={details.sensors.map((s) => ({
             sensorId: s.sensorId,
             type: s.type,
-            threshold: s.threshold === 'N/A' ? 0 : s.threshold,
+            // Передаем min/max для редактирования
+            min_value: s.min_value === 'N/A' ? 0 : s.min_value,
+            max_value: s.max_value === 'N/A' ? 0 : s.max_value,
+            // Сохраняем type для ключа в БД
+            sensor_type: s.type,
           }))}
           onClose={(isSaved) => {
             setIsConfigModalOpen(false)
