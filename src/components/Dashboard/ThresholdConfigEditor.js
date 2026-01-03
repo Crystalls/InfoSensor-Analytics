@@ -93,7 +93,13 @@ const ThresholdConfigEditor = ({ assetName, token, onClose, initialConfigs }) =>
                       htmlFor={`threshold-${config.sensorId}`}
                       className='me-2'
                     >
-                      Порог:
+                      Минимальный порог:
+                    </label>
+                    <label
+                      htmlFor={`threshold-${config.sensorId}`}
+                      className='me-2'
+                    >
+                      Максимальный порог:
                     </label>
                     <input
                       id={`threshold-${config.sensorId}`}

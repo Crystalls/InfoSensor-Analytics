@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import axios from 'axios'
 import '../Analytics/AnalyticsDashboard.css'
 import { API_BASE_URL } from '../../services/api'
@@ -23,20 +23,22 @@ const AnalyticsDashboard = ({ user, token }) => {
   const [error, setError] = useState(null)
 
   const [assetSensorMap, setAssetSensorMap] = useState({})
-  const [thresholdsByTypeMap, setThresholdsByTypeMap] = useState({}) // Карта порогов по ТИПУ
-  const [thresholdsForGauge, setThresholdsForGauge] = useState({ min: 0, max: 100 }) // Пороги для Gauge
+  const [thresholdsByTypeMap, setThresholdsByTypeMap] = useState({})
+
+  // Ref для интервала текущего состояния
+  const currentStateIntervalRef = useRef(null)
 
   const allowedAssets = user?.access_rights?.allowedAssets || []
 
   const today = moment().format('YYYY-MM-DD')
-  const threeDaysAgo = moment().subtract(3, 'days').format('YYYY-MM-DD')
+  const MonthsAgo = moment().subtract(1, 'months').format('YYYY-MM-DD')
 
   const [selectedAsset, setSelectedAsset] = useState(allowedAssets[0] || '')
   const [selectedSensor, setSelectedSensor] = useState('')
-  const [startDate, setStartDate] = useState(threeDaysAgo)
+  const [startDate, setStartDate] = useState(MonthsAgo)
   const [endDate, setEndDate] = useState(today)
 
-  // --- ФУНКЦИИ ЗАГРУЗКИ ---
+  // --- ФУНКЦИИ ЗАГРУЗКИ (СТАБИЛЬНЫЕ) ---
 
   const fetchFilterOptions = useCallback(async () => {
     if (!token) {
@@ -80,44 +82,18 @@ const AnalyticsDashboard = ({ user, token }) => {
     }
   }, [token, selectedAsset, selectedSensor, startDate, endDate])
 
-  // НОВАЯ ФУНКЦИЯ: Загрузка порогов по ТИПУ
-  const fetchThresholdsByType = useCallback(async () => {
-    const sensorsList = assetSensorMap[selectedAsset] || []
-    const sensorConfig = sensorsList.find((s) => s.id === selectedSensor)
-
-    if (!token || !sensorConfig || !sensorConfig.type) {
-      setThresholdsForGauge({ min: 0, max: 100 })
-      return
-    }
-
-    const sensorTypeEncoded = encodeURIComponent(sensorConfig.type)
-
+  const fetchAllThresholds = useCallback(async () => {
+    if (!token) return
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } }
-      // Используем новый роут, который отдает пороги по типу
-      const url = `${API_BASE_URL}/api/thresholds-by-type?type=${sensorTypeEncoded}`
-
-      const response = await axios.get(url, config)
-
-      // Ожидаем { thresholdMap: { "Тип": { min_value: X, max_value: Y } } }
-      const typeThresholds = response.data.thresholdMap?.[sensorConfig.type]
-
-      if (typeThresholds && typeThresholds.max_value !== undefined) {
-        setThresholdsForGauge({
-          min: parseFloat(typeThresholds.min_value) || 0, // Парсим на всякий случай
-          max: parseFloat(typeThresholds.max_value),
-        })
-      } else {
-        setThresholdsForGauge({ min: 0, max: 100 })
-      }
+      const response = await axios.get(`${API_BASE_URL}/api/thresholds-by-type`, config)
+      setThresholdsByTypeMap(response.data.thresholdMap || {})
     } catch (err) {
-      console.warn(`Thresholds by type not found for ${sensorConfig.type}. Using default.`)
-      setThresholdsForGauge({ min: 0, max: 100 })
+      console.error('Failed to load global thresholds:', err)
     }
-  }, [token, selectedAsset, selectedSensor, assetSensorMap])
+  }, [token])
 
   const fetchCurrentState = useCallback(async () => {
-    // ... (Остается прежним) ...
     if (!token || !selectedAsset) return
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } }
@@ -128,24 +104,67 @@ const AnalyticsDashboard = ({ user, token }) => {
       console.warn('Could not fetch current state for asset:', selectedAsset)
       setCurrentStateData([])
     }
-  }, [token, selectedAsset])
+  }, [token, selectedAsset]) // Зависит от selectedAsset
 
-  // --- ЭФФЕКТЫ ---
-  useEffect(() => {
-    fetchFilterOptions()
-  }, [fetchFilterOptions])
+  // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
-  // Запуск зависимых запросов
-  useEffect(() => {
-    if (selectedAsset) {
-      fetchCurrentState()
-      fetchThresholdsByType() // Обновляем пороги Gauge
+  const getThresholdsForSensor = (sensorId, allThresholds, assetMap, selectedAsset) => {
+    const sensorsList = assetMap[selectedAsset] || []
+    const sensorConfig = sensorsList.find((s) => s.id === sensorId)
 
-      if (selectedSensor && startDate && endDate) {
-        fetchChartData()
+    const sensorType = sensorConfig?.type
+
+    if (sensorType && allThresholds[sensorType]) {
+      const config = allThresholds[sensorType]
+      return {
+        min: parseFloat(config.min_value) || 0,
+        max: parseFloat(config.max_value) || 100,
+        // Возвращаем Type и ID для отображения
+        title: `${sensorType} (${sensorId})`,
       }
     }
-  }, [selectedAsset, fetchChartData, fetchCurrentState, fetchThresholdsByType, selectedSensor, startDate, endDate])
+    return { min: 0, max: 100 }
+  }
+
+  // --- ЭФФЕКТЫ И POLLING ---
+
+  // Эффект 1: Загрузка фильтров и порогов (запускается один раз)
+  useEffect(() => {
+    fetchFilterOptions()
+    fetchAllThresholds()
+  }, [fetchFilterOptions, fetchAllThresholds])
+
+  // Эффект 2: POLLING ТЕКУЩЕГО СОСТОЯНИЯ
+  useEffect(() => {
+    // Очистка старого интервала
+    if (currentStateIntervalRef.current) {
+      clearInterval(currentStateIntervalRef.current)
+    }
+
+    if (selectedAsset && token) {
+      // 1. Запуск первого запроса
+      fetchCurrentState()
+
+      // 2. Установка интервала
+      currentStateIntervalRef.current = setInterval(() => {
+        fetchCurrentState()
+      }, 5000)
+    }
+
+    // 3. Очистка при смене selectedAsset или при размонтировании
+    return () => {
+      if (currentStateIntervalRef.current) {
+        clearInterval(currentStateIntervalRef.current)
+      }
+    }
+  }, [selectedAsset, token, fetchCurrentState]) // Перезапускается только при смене Актива
+
+  // Эффект 3: Запуск запроса графика (запускается при смене фильтров)
+  useEffect(() => {
+    if (selectedAsset && selectedSensor && startDate && endDate) {
+      fetchChartData()
+    }
+  }, [selectedAsset, selectedSensor, startDate, endDate, fetchChartData])
 
   // Обработчик смены Актива
   const handleAssetChange = (newAsset) => {
@@ -161,9 +180,12 @@ const AnalyticsDashboard = ({ user, token }) => {
   const sensorsForSelectedAsset = assetSensorMap[selectedAsset] || []
 
   // --- ВСПОМОГАТЕЛЬНЫЙ КОМПОНЕНТ (GAUGE) ---
-  const StatusGauge = ({ value, min, max, sensorId }) => {
-    const minThreshold = parseFloat(min)
-    const maxThreshold = parseFloat(max)
+  const StatusGauge = ({ sensor, allThresholds, assetMap, selectedAsset }) => {
+    const { min, max, title } = getThresholdsForSensor(sensor.sensor_id, allThresholds, assetMap, selectedAsset)
+    const value = sensor.value
+
+    const minThreshold = min
+    const maxThreshold = max
 
     const range = maxThreshold - minThreshold
 
@@ -171,10 +193,10 @@ const AnalyticsDashboard = ({ user, token }) => {
       range > 0 ? Math.min(100, Math.max(0, ((value - minThreshold) / range) * 100)) : value > maxThreshold ? 100 : 0
 
     let color = '#28a745'
-    if (maxThreshold > 0 && value > maxThreshold * 1.05) {
-      color = '#dc3545'
-    } else if (maxThreshold > 0 && value >= maxThreshold) {
-      color = '#ffc107'
+    if (value > maxThreshold || value < minThreshold) {
+      color = '#dc3545' // Красная тревога
+    } else if (value >= maxThreshold * 0.95 && value < maxThreshold) {
+      color = '#ffc107' // Желтый: близко к максимуму
     }
 
     const gaugeData = [{ name: 'Status', value: normalizedValue, fill: color }]
@@ -188,7 +210,7 @@ const AnalyticsDashboard = ({ user, token }) => {
           className='text-light text-center mb-1'
           style={{ fontSize: '0.9rem' }}
         >
-          {sensorId}
+          {title}
         </h5>
         <ResponsiveContainer
           width='100%'
@@ -204,9 +226,9 @@ const AnalyticsDashboard = ({ user, token }) => {
             startAngle={90}
             endAngle={-270}
           >
+            {/* Убрали label, чтобы скрыть "100" */}
             <RadialBar
               minAngle={15}
-              label={{ position: 'insideStart', fill: '#fff', fontSize: '1.2rem' }}
               background={{ fill: '#3a3a40' }}
               clockWise
               dataKey='value'
@@ -237,6 +259,7 @@ const AnalyticsDashboard = ({ user, token }) => {
   // --- РЕНДЕРИНГ ---
   return (
     <div className='container mt-4'>
+      {/* ... (JSX остается прежним) ... */}
       <h1>Аналитические Графики</h1>
       <p
         className='lead text-muted'
@@ -394,24 +417,33 @@ const AnalyticsDashboard = ({ user, token }) => {
         )}
       </div>
 
-      {/* --- ГРАФИК 2: ТЕКУЩЕЕ СОСТОЯНИЕ (Gauge) --- */}
-      {currentStateData.length > 0 && !loading && (
+      {/* --- ГРАФИК 2: ТЕКУЩЕЕ СОСТОЯНИЕ (Gauge Chart - только для выбранного сенсора) --- */}
+      {selectedSensor && currentStateData.length > 0 && (
         <div className='row g-3 mt-3'>
-          <h4 className='text-light mb-3'>Текущий Статус Сенсоров Актива: {selectedAsset}</h4>
+          <h4 className='text-light mb-3'>Текущий статус сенсора:</h4>
 
-          {currentStateData.map((item, index) => (
-            <div
-              className='col-lg-3 col-md-6'
-              key={index}
-            >
-              <StatusGauge
-                value={item.value}
-                min={thresholdsForGauge.min}
-                max={thresholdsForGauge.max}
-                sensorId={item.sensor_id}
-              />
-            </div>
-          ))}
+          {currentStateData
+            .filter((item) => item.sensor_id === selectedSensor)
+            .map((item) => (
+              <div
+                className='col-lg-3 col-md-6'
+                key={item.sensor_id}
+              >
+                <StatusGauge
+                  sensor={item}
+                  allThresholds={thresholdsByTypeMap}
+                  assetMap={assetSensorMap}
+                  selectedAsset={selectedAsset}
+                />
+              </div>
+            ))}
+        </div>
+      )}
+
+      {!selectedSensor && currentStateData.length > 0 && (
+        <div className='row g-3 mt-3'>
+          <h4 className='text-light mb-3'>Текущий Статус Сенсоров</h4>
+          <p className='text-muted'>Выберите сенсор в фильтре, чтобы увидеть его текущее состояние.</p>
         </div>
       )}
     </div>

@@ -51,8 +51,6 @@ const sensorReadingSchema = new mongoose.Schema(
     asset: { type: String, required: true },
     value: { type: Number, required: true },
     unit: { type: String, required: true },
-    type: { type: String, required: false },
-    thresholds: { type: Object, required: false },
   },
   { strict: false }, // Позволяет вставлять данные с полями, не указанными явно (например, из Python)
 )
@@ -75,6 +73,7 @@ const ThresholdByTypeModelSchema = new mongoose.Schema({
   min_value: { type: Number, required: true }, // ID Сенсора (напр., "SNSR-0202")
   max_value: { type: Number, required: true }, // Пороговое значение
   sensor_type: { type: String, required: true },
+  unit: { type: String, required: true },
 })
 
 /*
@@ -123,11 +122,7 @@ const SensorCurrentStateModel = mongoose.model('SensorCurrentState', sensorReadi
 // Модель для конфигурирования пороговых значений
 const ThresholdConfigModel = mongoose.model('ThresholdConfig', ThresholdConfigSchema, 'threshold_config')
 
-const ThresholdByTypeModel = mongoose.model(
-  'ThresholdByTypeModel',
-  ThresholdByTypeModelSchema,
-  'threshold_by_type_config',
-)
+const ThresholdByTypeModel = mongoose.model('ThresholdByType', ThresholdByTypeModelSchema, 'threshold_by_type_config')
 
 const saltRounds = 10
 const jwtSecret = 'your-secret-key'
@@ -796,7 +791,7 @@ app.get('/api/thresholds-by-type', authenticateToken, async (req, res) => {
       thresholdMap[item.sensor_type] = {
         min_value: item.min_value,
         max_value: item.max_value,
-        // unit здесь не взят, если он не добавлен в схему
+        unit: item.unit,
       }
     })
 

@@ -13,67 +13,86 @@ function SensorDataDisplayEngineer() {
 
   const [thresholdsByTypeMap, setThresholdsByTypeMap] = useState({})
   const intervalRef = useRef(null)
+
+  // Ref для хранения актуальных порогов (для стабилизации функций)
   const thresholdsRef = useRef(thresholdsByTypeMap)
 
   // Эффект для синхронизации Ref
   useEffect(() => {
+    // Этот эффект запускается при каждом обновлении порогов и сохраняет их в Ref
     thresholdsRef.current = thresholdsByTypeMap
   }, [thresholdsByTypeMap])
 
-  // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (ОСТАЮТСЯ СТАБИЛЬНЫМИ) ---
+  // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (Используют Ref и теперь стабильны) ---
 
   const checkSensorError = useCallback((sensor) => {
     const currentThresholds = thresholdsRef.current
     if (!sensor || !sensor.sensor_type || sensor.value === undefined || !currentThresholds[sensor.sensor_type])
       return false
+
     const thresholdConfig = currentThresholds[sensor.sensor_type]
     const value = sensor.value
+    const lowerCaseType = sensor.sensor_type.toLowerCase()
 
+    // 1. Проверка полной структуры min/max (Давление)
     if (thresholdConfig.min_value !== undefined && thresholdConfig.max_value !== undefined) {
-      if (sensor.sensor_type.toLowerCase().includes('давл')) {
+      if (lowerCaseType.includes('давл')) {
         return value < thresholdConfig.min_value || value > thresholdConfig.max_value
       }
     }
+
+    // 2. Проверка max_value (Температура, Вибрация)
     const alertValue = thresholdConfig.max_value
     if (alertValue !== undefined) {
-      if (
-        sensor.sensor_type.toLowerCase().includes('температур') ||
-        sensor.sensor_type.toLowerCase().includes('вибрац') ||
-        sensor.sensor_type.toLowerCase().includes('влажн')
-      ) {
+      if (lowerCaseType.includes('температур') || lowerCaseType.includes('вибрац') || lowerCaseType.includes('влажн')) {
         return value > alertValue
       }
-      if (sensor.sensor_type.toLowerCase().includes('уровня')) {
+      // Проверка уровня (по min)
+      if (lowerCaseType.includes('уровня')) {
         return value < thresholdConfig.min_value
       }
     }
     return false
-  }, [])
+  }, []) // <-- Зависимости пусты, так как читаем из Ref
 
   const getAlertMessage = useCallback((sensor) => {
     const currentThresholds = thresholdsRef.current
     if (!sensor || !sensor.sensor_type || sensor.value === undefined || !currentThresholds[sensor.sensor_type])
       return ''
+
     const thresholdConfig = currentThresholds[sensor.sensor_type]
     const lowerCaseType = sensor.sensor_type.toLowerCase()
     const value = sensor.value
 
-    if (thresholdConfig.min_value !== undefined && thresholdConfig.max_value !== undefined) {
-      if (lowerCaseType.includes('давл')) {
-        if (value < thresholdConfig.min_value)
-          return `Давление ниже порогового значения (${thresholdConfig.min_value} Па)`
-        if (value > thresholdConfig.max_value)
-          return `Превышены пороговые значения давления (${thresholdConfig.max_value} Па)`
-      }
-    } else if (thresholdConfig.max_value !== undefined) {
-      const alertValue = thresholdConfig.max_value
-      if (lowerCaseType.includes('температур') && value > alertValue)
-        return `Превышены пороговые значения температуры (${alertValue} ${sensor.unit || ''})`
-      if (lowerCaseType.includes('вибрац') && value > alertValue)
-        return `Превышены пороговые значения вибрации (${alertValue} мм/сек)`
-      if (lowerCaseType.includes('уровня') && value < alertValue) return `Низкий уровень жидкости (${alertValue} мл)`
+    // Убеждаемся, что у нас есть хотя бы одно пороговое значение
+    if (thresholdConfig.max_value === undefined) {
+      return ''
     }
-    return ''
+
+    const minThreshold = thresholdConfig.min_value // Теперь должно быть 0 или число
+    const maxThreshold = thresholdConfig.max_value // 46 для температуры
+
+    // 1. ЛОГИКА ДЛЯ ДАВЛЕНИЯ (Требуется диапазон)
+    if (lowerCaseType.includes('давл')) {
+      if (value < minThreshold) return `Давление ниже порогового значения (${minThreshold} Па)`
+      if (value > maxThreshold) return `Превышены пороговые значения давления (${maxThreshold} Па)`
+    }
+
+    // 2. ЛОГИКА ДЛЯ ТЕМПЕРАТУРЫ, ВИБРАЦИИ (Только верхний предел)
+    else if (
+      lowerCaseType.includes('температур') ||
+      lowerCaseType.includes('вибрац') ||
+      lowerCaseType.includes('влажн')
+    ) {
+      if (value > maxThreshold) return `Превышены пороговые значения (${maxThreshold} ${sensor.unit || ''})`
+    }
+
+    // 3. ЛОГИКА ДЛЯ УРОВНЯ (Только нижний предел)
+    else if (lowerCaseType.includes('уровня')) {
+      if (value < minThreshold) return `Низкий уровень жидкости (${minThreshold} мл)`
+    }
+
+    return '' // Нет тревоги
   }, [])
 
   const getAlertThresholdForAlertValue = useCallback((sensor) => {
@@ -89,10 +108,9 @@ function SensorDataDisplayEngineer() {
     return { min: 0, max: 200 }
   }, [])
 
-  // ... (groupDataByAsset и toggleItemExpand - остаются прежними)
+  // --- ГРУППИРОВКА И РАСКРЫТИЕ ---
 
   const groupDataByAsset = (dataArray) => {
-    /* ... */
     const grouped = {}
     dataArray.forEach((sensor) => {
       const section = sensor.wsection
@@ -151,7 +169,7 @@ function SensorDataDisplayEngineer() {
       const dataWithErrorFlags = initialData.map((data) => ({
         ...data,
         isExpanded: false,
-        hasError: checkSensorError(data),
+        hasError: checkSensorError(data), // Использует стабильный checkSensorError
       }))
 
       setSensorData(dataWithErrorFlags)
@@ -162,22 +180,25 @@ function SensorDataDisplayEngineer() {
     } finally {
       setLoading(false)
     }
-  }, [checkSensorError])
+  }, [checkSensorError]) // Зависит от checkSensorError (который стабилен)
 
   useEffect(() => {
+    // Первая загрузка
     fetchAllThresholdsByType()
     fetchSensorData()
 
+    // Создание интервала (должно быть стабильным)
     intervalRef.current = setInterval(() => {
       fetchSensorData()
     }, 5000)
 
+    // Очистка при размонтировании (при переходе на другую страницу)
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
       }
     }
-  }, [fetchSensorData, fetchAllThresholdsByType])
+  }, [fetchSensorData, fetchAllThresholdsByType]) // Эти функции стабильны
 
   // --- РЕНДЕРИНГ КОМПОНЕНТА ---
 
@@ -248,7 +269,6 @@ function SensorDataDisplayEngineer() {
                                                                     ${data.hasError ? 'sensor-error' : ''}
                                                                 `}
                                   >
-                                    {/* ВОССТАНОВЛЕННАЯ СТРУКТУРА: li > div.sensor-header > div.title */}
                                     <li className='sensor-item'>
                                       <div
                                         className='sensor-header'
@@ -256,6 +276,7 @@ function SensorDataDisplayEngineer() {
                                           toggleItemExpand('SENSOR', sectionName, assetName, data.sensor_id)
                                         }
                                       >
+                                        {/* ВОССТАНОВЛЕННЫЙ ТЕГ: h1 для стилей */}
                                         <p className='title'>
                                           ID Датчика: {data.sensor_id}
                                           <br></br>
