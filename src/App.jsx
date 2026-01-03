@@ -150,6 +150,7 @@ function App() {
                     <Routes>
                         {/* Корневой роут, который перенаправляет в зависимости от статуса логина */}
                         <Route path="/Home" element={<Home/>} /> 
+                        <Route path="/" element={<Home/>} /> 
 
                         <Route path="/register" element={<RegistrationForm />} />
                         

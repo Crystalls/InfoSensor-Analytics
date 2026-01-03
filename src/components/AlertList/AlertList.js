@@ -2,86 +2,68 @@ import React from 'react'
 
 function AlertValue({ sensorType, value, alertThreshold, alertMessage, unit }) {
   let isAlert = false
-  let displayMessage = `${value} ${unit}` // По умолчанию отображаем значение и единицу измерения
-  let messageColor = 'white' // По умолчанию белый цвет
+  let messageColor = 'white'
 
+  // --- ИСПРАВЛЕНИЕ: Объявление переменной ---
   const lowerCaseType = sensorType.toLowerCase()
+  // ------------------------------------------
 
-  // Проверка, что значение существует, иначе возвращаем "Н/Д"
   if (value === undefined || value === null) {
     return <p style={{ color: 'yellow' }}>Н/Д</p>
   }
 
+  // Мы ожидаем, что alertThreshold будет объектом {min, max}
+  const minThreshold = parseFloat(alertThreshold?.min)
+  const maxThreshold = parseFloat(alertThreshold?.max)
+
+  const isMaxValid = !isNaN(maxThreshold)
+  const isMinValid = !isNaN(minThreshold)
+
+  // --- ЛОГИКА ОПРЕДЕЛЕНИЯ АЛЕРТА (НЕ ФОРМИРОВАНИЯ СООБЩЕНИЯ) ---
+
   if (lowerCaseType.includes('температур') || lowerCaseType.includes('влажн')) {
-    // Для температуры и влажности
-    if (value > alertThreshold) {
+    // ТРЕВОГА: value > MAX
+    if (isMaxValid && value > maxThreshold) {
       isAlert = true
-      messageColor = 'red'
-      displayMessage = alertMessage
-        ? `${alertMessage}: ${value} ${unit}`
-        : `Превышено значение: ${alertThreshold} -> ${value} ${unit}`
     }
   } else if (lowerCaseType.includes('давл')) {
-    // Для датчиков давления
-    if (
-      typeof alertThreshold === 'object' &&
-      alertThreshold !== null &&
-      alertThreshold.min !== undefined &&
-      alertThreshold.max !== undefined
-    ) {
-      const min = alertThreshold.min
-      const max = alertThreshold.max
-
-      if (value < min) {
+    // ТРЕВОГА: value < MIN или value > MAX
+    if (isMinValid && isMaxValid) {
+      if (value < minThreshold || value > maxThreshold) {
         isAlert = true
-        messageColor = 'red'
-        displayMessage = alertMessage ? `${alertMessage}: ${value} ${unit}` : `Ниже порога (${min}): ${value} ${unit}`
-      } else if (value > max) {
-        isAlert = true
-        messageColor = 'red'
-        displayMessage = alertMessage ? `${alertMessage}: ${value} ${unit}` : `Выше порога (${max}): ${value} ${unit}`
       }
+    }
+  } else if (lowerCaseType.includes('уровня')) {
+    // ТРЕВОГА: value < MIN
+    if (isMinValid && value < minThreshold) {
+      isAlert = true
+    }
+  } else if (lowerCaseType.includes('вибрац')) {
+    // ТРЕВОГА: value > MAX
+    if (isMaxValid && value > maxThreshold) {
+      isAlert = true
+    }
+  }
+
+  // --- РЕНДЕРИНГ И СООБЩЕНИЯ ---
+
+  if (isAlert) {
+    messageColor = 'red'
+
+    if (alertMessage) {
+      // Если родитель передал сообщение, используем его
+      return <p style={{ color: messageColor }}>{alertMessage}</p>
     } else {
-      console.warn(
-        'AlertValue: Для датчика давления ожидается объект alertThreshold {min, max}. Получено:',
-        alertThreshold,
+      // Запасной вариант, если isAlert true, но сообщение не пришло
+      return (
+        <p style={{ color: messageColor }}>
+          Тревога! {value} {unit}
+        </p>
       )
-      // В случае ошибки передачи данных, отображаем как есть, но не в состоянии тревоги
-      displayMessage = `${value} ${unit}`
     }
   }
 
-  if (lowerCaseType.includes('уровня')) {
-    if (value < alertThreshold) {
-      isAlert = true
-      messageColor = 'red'
-      displayMessage = alertMessage ? `${alertMessage}: ${value} ${unit}` : `Низкий уровень: -> ${value} ${unit}`
-    } else {
-      // Случай успеха для уровня
-      displayMessage = `${value} ${unit}`
-    }
-  }
-
-  if (lowerCaseType.includes('вибрац')) {
-    if (value > alertThreshold) {
-      isAlert = true
-      messageColor = 'red'
-      displayMessage = alertMessage
-        ? `${alertMessage}: ${value} ${unit}`
-        : `Превышены пороговые значения: -> ${value} ${unit}`
-    } else {
-      // Случай успеха для уровня
-      displayMessage = `${value} ${unit}`
-    }
-  }
-
-  // Если isAlert === false, мы отображаем исходное или нормальное сообщение
-  if (!isAlert) {
-    // Если тип неизвестен ИЛИ тип известен, но нет тревоги
-    return <p style={{ color: 'white' }}>{`${value} ${unit}`}</p>
-  }
-
-  // Если isAlert === true (сработало для температуры, влажности, давления или уровня)
-  return <p style={{ color: messageColor }}>{displayMessage}</p>
+  // Если нет тревоги
+  return <p style={{ color: 'white' }}>{`${value} ${unit}`}</p>
 }
 export default AlertValue

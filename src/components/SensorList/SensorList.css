@@ -22,6 +22,7 @@
 .sensor_container {
   display: grid;
   max-width: 500px;
+  width: 500px;
   grid-template-columns: 1fr;
   border-radius: 26px;
   background-color: rgba(255, 255, 255, 0.15);
@@ -55,6 +56,8 @@
   color: #ecbf42;
   margin-bottom: 5px;
   margin-right: 10px;
+  flex-grow: 0;
+  width: 80%;
 }
 
 .data_info {
@@ -92,7 +95,7 @@
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  max-width: 400px;
+  max-width: 500px;
 }
 
 /* Стиль для стрелки */

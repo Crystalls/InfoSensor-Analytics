@@ -70,6 +70,13 @@ const ThresholdConfigSchema = new mongoose.Schema(
 // Обеспечиваем уникальность пары Актив-Сенсор
 ThresholdConfigSchema.index({ asset: 1, sensorId: 1 }, { unique: true })
 
+const ThresholdByTypeModelSchema = new mongoose.Schema({
+  sensor_type: { type: String, required: true }, // Имя Актива (напр., "Токарный станок")
+  min_value: { type: Number, required: true }, // ID Сенсора (напр., "SNSR-0202")
+  max_value: { type: Number, required: true }, // Пороговое значение
+  sensor_type: { type: String, required: true },
+})
+
 /*
 const sensorReportsSchema = new mongoose.Schema(
   {
@@ -115,6 +122,12 @@ const SensorCurrentStateModel = mongoose.model('SensorCurrentState', sensorReadi
 
 // Модель для конфигурирования пороговых значений
 const ThresholdConfigModel = mongoose.model('ThresholdConfig', ThresholdConfigSchema, 'threshold_config')
+
+const ThresholdByTypeModel = mongoose.model(
+  'ThresholdByTypeModel',
+  ThresholdByTypeModelSchema,
+  'threshold_by_type_config',
+)
 
 const saltRounds = 10
 const jwtSecret = 'your-secret-key'
@@ -747,6 +760,50 @@ app.get('/api/config/sensor-options', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching sensor options:', error)
     res.status(500).json({ message: 'Ошибка сервера при получении списка сенсоров.' })
+  }
+})
+
+app.get('/api/current-state-for-asset', authenticateToken, async (req, res) => {
+  const { asset } = req.query
+  const { allowedAssets } = req.user.access_rights
+
+  if (!asset || !allowedAssets.includes(asset)) {
+    return res.status(400).json({ message: 'Неверный актив или нет доступа.' })
+  }
+
+  try {
+    // Мы ищем в коллекции sensor_current_data
+    const currentState = await SensorCurrentStateModel.find({ asset: asset })
+      .select('sensor_id value last_updated')
+      .sort({ sensor_id: 1 })
+      .lean()
+
+    res.status(200).json({ currentState })
+  } catch (error) {
+    console.error('Error fetching current state:', error)
+    res.status(500).json({ message: 'Ошибка сервера при получении текущего состояния.' })
+  }
+})
+
+app.get('/api/thresholds-by-type', authenticateToken, async (req, res) => {
+  try {
+    // --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Читаем напрямую из ThresholdByTypeModel ---
+    const thresholdList = await ThresholdByTypeModel.find({}).lean()
+
+    const thresholdMap = {}
+    thresholdList.forEach((item) => {
+      // Предполагаем, что в ThresholdByTypeModelSchema поля называются min_value, max_value, sensor_type
+      thresholdMap[item.sensor_type] = {
+        min_value: item.min_value,
+        max_value: item.max_value,
+        // unit здесь не взят, если он не добавлен в схему
+      }
+    })
+
+    res.status(200).json({ thresholdMap })
+  } catch (error) {
+    console.error('Error fetching thresholds by type:', error)
+    res.status(500).json({ message: 'Ошибка сервера при получении порогов по типу.' })
   }
 })
 

@@ -3,15 +3,29 @@ import axios from 'axios'
 import '../Analytics/AnalyticsDashboard.css'
 import { API_BASE_URL } from '../../services/api'
 import moment from 'moment'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  RadialBarChart,
+  RadialBar,
+} from 'recharts'
 
 const AnalyticsDashboard = ({ user, token }) => {
   const [chartData, setChartData] = useState([])
+  const [currentStateData, setCurrentStateData] = useState([])
   const [loading, setLoading] = useState(false)
-  const [optionsLoading, setOptionsLoading] = useState(true) // Загрузка фильтров
+  const [optionsLoading, setOptionsLoading] = useState(true)
   const [error, setError] = useState(null)
 
   const [assetSensorMap, setAssetSensorMap] = useState({})
+  const [thresholdsByTypeMap, setThresholdsByTypeMap] = useState({}) // Карта порогов по ТИПУ
+  const [thresholdsForGauge, setThresholdsForGauge] = useState({ min: 0, max: 100 }) // Пороги для Gauge
+
   const allowedAssets = user?.access_rights?.allowedAssets || []
 
   const today = moment().format('YYYY-MM-DD')
@@ -21,6 +35,8 @@ const AnalyticsDashboard = ({ user, token }) => {
   const [selectedSensor, setSelectedSensor] = useState('')
   const [startDate, setStartDate] = useState(threeDaysAgo)
   const [endDate, setEndDate] = useState(today)
+
+  // --- ФУНКЦИИ ЗАГРУЗКИ ---
 
   const fetchFilterOptions = useCallback(async () => {
     if (!token) {
@@ -49,14 +65,11 @@ const AnalyticsDashboard = ({ user, token }) => {
 
   const fetchChartData = useCallback(async () => {
     if (!token || !selectedAsset || !selectedSensor || !startDate || !endDate) return
-
     setLoading(true)
     setError(null)
-
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } }
       const url = `${API_BASE_URL}/api/historical-data?asset=${selectedAsset}&sensorId=${selectedSensor}&startDate=${startDate}&endDate=${endDate}`
-
       const response = await axios.get(url, config)
       setChartData(response.data.chartData)
     } catch (err) {
@@ -67,15 +80,72 @@ const AnalyticsDashboard = ({ user, token }) => {
     }
   }, [token, selectedAsset, selectedSensor, startDate, endDate])
 
-  // Эффекты
+  // НОВАЯ ФУНКЦИЯ: Загрузка порогов по ТИПУ
+  const fetchThresholdsByType = useCallback(async () => {
+    const sensorsList = assetSensorMap[selectedAsset] || []
+    const sensorConfig = sensorsList.find((s) => s.id === selectedSensor)
+
+    if (!token || !sensorConfig || !sensorConfig.type) {
+      setThresholdsForGauge({ min: 0, max: 100 })
+      return
+    }
+
+    const sensorTypeEncoded = encodeURIComponent(sensorConfig.type)
+
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } }
+      // Используем новый роут, который отдает пороги по типу
+      const url = `${API_BASE_URL}/api/thresholds-by-type?type=${sensorTypeEncoded}`
+
+      const response = await axios.get(url, config)
+
+      // Ожидаем { thresholdMap: { "Тип": { min_value: X, max_value: Y } } }
+      const typeThresholds = response.data.thresholdMap?.[sensorConfig.type]
+
+      if (typeThresholds && typeThresholds.max_value !== undefined) {
+        setThresholdsForGauge({
+          min: parseFloat(typeThresholds.min_value) || 0, // Парсим на всякий случай
+          max: parseFloat(typeThresholds.max_value),
+        })
+      } else {
+        setThresholdsForGauge({ min: 0, max: 100 })
+      }
+    } catch (err) {
+      console.warn(`Thresholds by type not found for ${sensorConfig.type}. Using default.`)
+      setThresholdsForGauge({ min: 0, max: 100 })
+    }
+  }, [token, selectedAsset, selectedSensor, assetSensorMap])
+
+  const fetchCurrentState = useCallback(async () => {
+    // ... (Остается прежним) ...
+    if (!token || !selectedAsset) return
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } }
+      const url = `${API_BASE_URL}/api/current-state-for-asset?asset=${selectedAsset}`
+      const response = await axios.get(url, config)
+      setCurrentStateData(response.data.currentState || [])
+    } catch (err) {
+      console.warn('Could not fetch current state for asset:', selectedAsset)
+      setCurrentStateData([])
+    }
+  }, [token, selectedAsset])
+
+  // --- ЭФФЕКТЫ ---
   useEffect(() => {
     fetchFilterOptions()
   }, [fetchFilterOptions])
+
+  // Запуск зависимых запросов
   useEffect(() => {
-    if (selectedAsset && selectedSensor && startDate && endDate) {
-      fetchChartData()
+    if (selectedAsset) {
+      fetchCurrentState()
+      fetchThresholdsByType() // Обновляем пороги Gauge
+
+      if (selectedSensor && startDate && endDate) {
+        fetchChartData()
+      }
     }
-  }, [fetchChartData])
+  }, [selectedAsset, fetchChartData, fetchCurrentState, fetchThresholdsByType, selectedSensor, startDate, endDate])
 
   // Обработчик смены Актива
   const handleAssetChange = (newAsset) => {
@@ -90,6 +160,81 @@ const AnalyticsDashboard = ({ user, token }) => {
 
   const sensorsForSelectedAsset = assetSensorMap[selectedAsset] || []
 
+  // --- ВСПОМОГАТЕЛЬНЫЙ КОМПОНЕНТ (GAUGE) ---
+  const StatusGauge = ({ value, min, max, sensorId }) => {
+    const minThreshold = parseFloat(min)
+    const maxThreshold = parseFloat(max)
+
+    const range = maxThreshold - minThreshold
+
+    const normalizedValue =
+      range > 0 ? Math.min(100, Math.max(0, ((value - minThreshold) / range) * 100)) : value > maxThreshold ? 100 : 0
+
+    let color = '#28a745'
+    if (maxThreshold > 0 && value > maxThreshold * 1.05) {
+      color = '#dc3545'
+    } else if (maxThreshold > 0 && value >= maxThreshold) {
+      color = '#ffc107'
+    }
+
+    const gaugeData = [{ name: 'Status', value: normalizedValue, fill: color }]
+
+    return (
+      <div
+        className='gauge-wrapper p-3 dark-card'
+        style={{ height: '200px', width: '100%' }}
+      >
+        <h5
+          className='text-light text-center mb-1'
+          style={{ fontSize: '0.9rem' }}
+        >
+          {sensorId}
+        </h5>
+        <ResponsiveContainer
+          width='100%'
+          height='80%'
+        >
+          <RadialBarChart
+            cx='50%'
+            cy='55%'
+            innerRadius='50%'
+            outerRadius='90%'
+            barSize={15}
+            data={gaugeData}
+            startAngle={90}
+            endAngle={-270}
+          >
+            <RadialBar
+              minAngle={15}
+              label={{ position: 'insideStart', fill: '#fff', fontSize: '1.2rem' }}
+              background={{ fill: '#3a3a40' }}
+              clockWise
+              dataKey='value'
+              cornerRadius={10}
+            />
+            <text
+              x='50%'
+              y='55%'
+              textAnchor='middle'
+              dominantBaseline='middle'
+              className='text-light'
+              style={{ fontSize: '1.5rem', fontWeight: 'bold' }}
+            >
+              {value.toFixed(2)}
+            </text>
+          </RadialBarChart>
+        </ResponsiveContainer>
+        <p
+          className='text-center text-muted'
+          style={{ fontSize: '0.8rem', margin: '0' }}
+        >
+          Норма: {minThreshold.toFixed(1)} - {maxThreshold.toFixed(1)}
+        </p>
+      </div>
+    )
+  }
+
+  // --- РЕНДЕРИНГ ---
   return (
     <div className='container mt-4'>
       <h1>Аналитические Графики</h1>
@@ -103,7 +248,6 @@ const AnalyticsDashboard = ({ user, token }) => {
       {/* --- БЛОК ФИЛЬТРОВ --- */}
       <div className='p-3 mb-4 border rounded shadow-lg analytics-filter-bar'>
         {optionsLoading ? (
-          // *** Скелетон для строки фильтров ***
           <div className='row g-3 align-items-end'>
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div
@@ -116,9 +260,7 @@ const AnalyticsDashboard = ({ user, token }) => {
             ))}
           </div>
         ) : (
-          // *** РАЗМЕТКА С КЛАССАМИ ---
           <div className='row g-3 align-items-end'>
-            {/* Выбор Актива */}
             <div className='col-md-3'>
               <label className='form-label text-light'>Актив:</label>
               <select
@@ -138,7 +280,6 @@ const AnalyticsDashboard = ({ user, token }) => {
               </select>
             </div>
 
-            {/* Выбор Сенсора */}
             <div className='col-md-3'>
               <label className='form-label text-light'>Сенсор:</label>
               <select
@@ -155,6 +296,7 @@ const AnalyticsDashboard = ({ user, token }) => {
                       key={sensor.id}
                       value={sensor.id}
                     >
+                      {' '}
                       {sensor.type} ({sensor.id})
                     </option>
                   ))
@@ -162,7 +304,6 @@ const AnalyticsDashboard = ({ user, token }) => {
               </select>
             </div>
 
-            {/* Выбор Даты */}
             <div className='col-md-2'>
               <label className='form-label text-light'>Начальная Дата:</label>
               <input
@@ -198,9 +339,10 @@ const AnalyticsDashboard = ({ user, token }) => {
 
       {error && <div className='alert alert-danger'>{error}</div>}
 
+      {/* --- ГРАФИК 1: ИСТОРИЧЕСКИЕ ДАННЫЕ --- */}
       <div
         className='card p-3 chart-container'
-        style={{ border: 'none', height: '400px' }}
+        style={{ border: 'none', height: '400px', marginBottom: '20px' }}
       >
         {chartData.length > 0 && !loading ? (
           <ResponsiveContainer
@@ -231,11 +373,11 @@ const AnalyticsDashboard = ({ user, token }) => {
                 stroke='#007bff'
                 strokeWidth={3}
                 dot={false}
+                name={`История ${selectedSensor}`}
               />
             </LineChart>
           </ResponsiveContainer>
         ) : loading || optionsLoading ? (
-          // Скелетон графика
           <div className='skeleton-chart-container p-4'>
             <div
               className='skeleton-base'
@@ -251,6 +393,27 @@ const AnalyticsDashboard = ({ user, token }) => {
           </p>
         )}
       </div>
+
+      {/* --- ГРАФИК 2: ТЕКУЩЕЕ СОСТОЯНИЕ (Gauge) --- */}
+      {currentStateData.length > 0 && !loading && (
+        <div className='row g-3 mt-3'>
+          <h4 className='text-light mb-3'>Текущий Статус Сенсоров Актива: {selectedAsset}</h4>
+
+          {currentStateData.map((item, index) => (
+            <div
+              className='col-lg-3 col-md-6'
+              key={index}
+            >
+              <StatusGauge
+                value={item.value}
+                min={thresholdsForGauge.min}
+                max={thresholdsForGauge.max}
+                sensorId={item.sensor_id}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
