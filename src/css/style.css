@@ -9,7 +9,7 @@ body {
 }
 
 p {
-  color: #cfd8cf !important;
+  margin: 0;
 }
 
 .modal-content {
