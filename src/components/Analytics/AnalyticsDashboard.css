@@ -1,108 +1,43 @@
-/* --- Общие стили для темной темы --- */
-body {
-  background-color: #282830;
-}
-
-/* Заголовки */
-h1 {
-  color: #ffffff;
-}
-.lead.text-muted {
-  color: #ff6666 !important; /* Бордово-красный */
-}
-
-.text-light {
-  color: #fff;
-  padding-right: 2%;
-}
-
-/* --- Стили для блока ФИЛЬТРОВ (Светлая форма на темном фоне) --- */
-.analytics-filter-bar {
-  background-color: #46464d !important; /* Светло-серый фон для блока фильтров, как на фото регистрации */
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7) !important;
-  padding: 15px !important;
-}
-
-/* Метки внутри формы (Темный текст) */
-.dark-input-group label {
-  color: #333 !important; /* Темный текст */
-  font-size: 0.9rem;
-}
-
-/* Поля ввода и селекты (Светлый фон, темный текст) */
-.light-input {
-  background-color: #ffffff !important;
-  border-color: #aaaaaa !important;
-  color: #111 !important;
+.dark-input {
+  background-color: #383838 !important; /* Более темный фон, чем фильтр-бар */
+  border-color: #555555 !important;
+  color: #ffffff !important; /* Светлый текст */
   box-shadow: none !important;
+  /* Убедимся, что текст в них не обрезается */
+  padding: 0.375rem 0.75rem !important;
 }
-.light-input:focus {
-  border-color: #28a745 !important; /* Зеленый фокус */
-  box-shadow: 0 0 0 0.25rem rgba(40, 167, 69, 0.25) !important;
-}
-
-/* Кнопка */
-.btn-primary {
-  padding: 10px; /* Внутренние отступы для кнопки */
-  background-color: #268b3e; /* Цвет фона кнопки */
-  color: white; /* Цвет текста кнопки */
-  border: none; /* Убираем границу кнопки */
-  border-radius: 4px; /* Скругление углов кнопки */
-  cursor: pointer; /* Курсор при наведении */
-}
-.btn-primary:hover {
-  background-color: #218838 !important;
-  border-color: #1e7e34 !important;
+.dark-input:focus {
+  border-color: #007bff !important; /* Синий фокус */
+  box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25) !important;
 }
 
-/* --- Стили Recharts (Оставлены из предыдущего ответа) --- */
-.chart-container {
-  background-color: #2e2e38 !important;
-  border: 1px solid #444;
-  height: 400px;
-  border-radius: 8px;
-}
-.recharts-tooltip-content {
-  background-color: #1e1e24 !important;
-  border: 1px solid #666 !important;
-  border-radius: 4px !important;
-  color: white !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+/* Убедитесь, что метки в темном режиме светлые */
+.analytics-filter-bar .text-light {
+  color: #ffffff !important;
 }
 
-/* --- Стили Скелетона --- */
-@keyframes pulse {
-  0% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 0.85;
-  }
-  100% {
-    opacity: 0.6;
-  }
+.row {
+  --bs-gutter-x: 1.5rem; /* Отступ между колонками (g-3) */
+  --bs-gutter-y: 0;
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: calc(var(--bs-gutter-y) * -1);
+  margin-right: calc(var(--bs-gutter-x) * -0.5);
+  margin-left: calc(var(--bs-gutter-x) * -0.5);
 }
-.skeleton-base {
-  background-color: #3a3a40;
-  border-radius: 4px;
-  animation: pulse 1.5s infinite ease-in-out;
+
+.row > * {
+  padding-right: calc(var(--bs-gutter-x) * 0.5);
+  padding-left: calc(var(--bs-gutter-x) * 0.5);
+  margin-top: var(--bs-gutter-y);
 }
-.skeleton-input-bar {
-  height: 38px;
-  margin-bottom: 15px;
+
+/* Принудительная стилизация колонок (col-md-3, col-md-2) */
+.col-md-3 {
+  flex: 0 0 auto;
+  width: 25%;
 }
-.skeleton-label {
-  height: 14px;
-  width: 50%;
-  margin-bottom: 5px;
-}
-.skeleton-chart-container {
-  height: 400px;
-  background-color: #3a3a40 !important;
-  border-radius: 8px;
-  padding: 20px;
-}
-.p-3 {
-  margin-top: 20px;
+.col-md-2 {
+  flex: 0 0 auto;
+  width: 16.666667%;
 }

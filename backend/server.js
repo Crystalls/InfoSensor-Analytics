@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken')
 const mongoose = require('mongoose')
 const { v4: uuidv4 } = require('uuid')
 const { check, validationResult } = require('express-validator')
+const schedule = require('node-schedule')
 
 const app = express()
 const port = 3001
@@ -21,10 +22,6 @@ const ASSET_REGISTRY = {
 
 // соединение с MongoDB
 const mongoUri = 'mongodb://127.0.0.1:27017/newdb'
-mongoose
-  .connect(mongoUri)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('MongoDB connection error:', err))
 
 // Схема для коллекции пользователей
 const userSchema = new mongoose.Schema({
@@ -69,10 +66,9 @@ const ThresholdConfigSchema = new mongoose.Schema(
 ThresholdConfigSchema.index({ asset: 1, sensorId: 1 }, { unique: true })
 
 const ThresholdByTypeModelSchema = new mongoose.Schema({
-  sensor_type: { type: String, required: true }, // Имя Актива (напр., "Токарный станок")
+  sensor_type: { type: String, required: true },
   min_value: { type: Number, required: true }, // ID Сенсора (напр., "SNSR-0202")
   max_value: { type: Number, required: true }, // Пороговое значение
-  sensor_type: { type: String, required: true },
   unit: { type: String, required: true },
 })
 
@@ -91,30 +87,52 @@ const sensorReportsSchema = new mongoose.Schema(
 )
 */
 
-/*
-const sensorAlertsSchema = new mongoose.Schema(
-  {
-    sensor_id: { type: String, required: true },
-    alert_type: { type: String, required: true },
-    message: { type: String, required: true },
-    value: { type: Number, required: true },
-    timestamp: { type: Date, default: Date.now },
-    isRead: { type: Boolean },
-    resolvedby: { type: String },
-    resolvedAt: { type: Date, default: Date.now },
-  },
+const sensorAlertsSchema = new mongoose.Schema({
+  sensor_id: { type: String, required: true },
+  alert_type: { type: String, required: true },
+  message: { type: String, required: true },
+  value: { type: Number, required: true },
+  timestamp: { type: Date, default: Date.now },
+  isRead: { type: Boolean },
+  resolvedBy: { type: String },
+  resolvedAt: { type: Date, default: Date.now },
+  wsection: { type: String, required: true },
+})
+
+sensorAlertsSchema.index(
+  { sensor_id: 1, alert_type: 1, resolvedBy: 1 },
+  { unique: true, partialFilterExpression: { resolvedBy: { $exists: false } } },
 )
-*/
+
+const AssetSchema = new mongoose.Schema(
+  {
+    assetName: { type: String, required: true, unique: true },
+    workshop: { type: String, required: true }, // Цех, к которому привязан актив (например, 'Цех №2')
+    status: { type: String, default: 'Активен' }, // Статус (Активен/Тревога/В ремонте)
+    lastValue: { type: Number },
+    lastUpdateTime: { type: Date, default: Date.now },
+    responsibleEngineer: { type: String }, // Имя инженера
+    sensors: [
+      // Список сенсоров, которые привязаны к этому активу (например, ['SNSR-001', 'SNSR-002'])
+      {
+        sensorId: { type: String, required: true },
+        sensorType: { type: String, required: true },
+        // В будущем можно хранить здесь их пороговые ID
+      },
+    ],
+  },
+  { timestamps: true },
+)
 
 // Модель для Истории
 const SensorDataHistory = mongoose.model('SensorDataHistory', sensorReadingSchema, 'sensor_data_histories')
 /*
  Модель для отчетов
 const sensorReportsSchema = mongoose.model('sensorReportsSchema', sensorReportsSchema, 'sensor_reports')
+*/
 
 // Модель для оповещений
-const sensorAlertsSchema = mongoose.model('sensorAlertsSchema', sensorAlertsSchema, 'sensor_alerts')
-*/
+const SensorAlertModel = mongoose.model('sensorAlertsSchema', sensorAlertsSchema, 'sensor_alerts')
 
 // Модель для Текущего Состояния
 const SensorCurrentStateModel = mongoose.model('SensorCurrentState', sensorReadingSchema, 'sensor_current_data')
@@ -123,6 +141,9 @@ const SensorCurrentStateModel = mongoose.model('SensorCurrentState', sensorReadi
 const ThresholdConfigModel = mongoose.model('ThresholdConfig', ThresholdConfigSchema, 'threshold_config')
 
 const ThresholdByTypeModel = mongoose.model('ThresholdByType', ThresholdByTypeModelSchema, 'threshold_by_type_config')
+
+// Модель для добавления нового датчика
+const AssetModel = mongoose.model('Asset', AssetSchema, 'assets')
 
 const saltRounds = 10
 const jwtSecret = 'your-secret-key'
@@ -150,6 +171,183 @@ function authenticateToken(req, res, next) {
     req.user = user
     next()
   })
+}
+
+/**
+ * Функция генерации тревог: Сравнивает текущие показания с порогами и сохраняет новые записи в БД.
+ */
+async function generateSensorAlerts() {
+  console.log(`[ALERT CHECK] Running alert generation at ${new Date().toLocaleTimeString()}`)
+
+  try {
+    // 1. Загружаем пороги
+    const thresholds = await ThresholdByTypeModel.find({}).lean()
+    const thresholdsMap = new Map(thresholds.map((t) => [t.sensor_type, t]))
+
+    if (thresholdsMap.size === 0) {
+      console.log('[ALERT CHECK] No thresholds configured. Skipping.')
+      return
+    }
+
+    // 2. Загружаем все текущие показания
+    const currentReadings = await SensorCurrentStateModel.find({}).lean()
+    // Ключ: SensorID-SensorType (для удобного поиска текущего значения)
+    const readingsMap = new Map(currentReadings.map((r) => [`${r.sensor_id}-${r.sensor_type}`, r]))
+
+    console.log(`[DEBUG] Thresholds loaded: ${thresholdsMap.size} types configured.`)
+    console.log(`[DEBUG] Current readings loaded: ${currentReadings.length} records.`)
+
+    const newAlerts = []
+    const resolvedAlertIds = []
+
+    // --- ФАЗА 1: Проверка на создание НОВЫХ тревог ---
+    for (const reading of currentReadings) {
+      const threshold = thresholdsMap.get(reading.sensor_type)
+      if (!threshold) continue
+
+      const value = reading.value
+      const sensorId = reading.sensor_id
+      const lowerCaseType = reading.sensor_type.toLowerCase()
+
+      let isAlert = false
+      let message = ''
+      let alert_type = 'GENERAL'
+      const min = threshold.min_value
+      const max = threshold.max_value
+
+      // ЛОГИКА АКТИВАЦИИ ТРЕВОГИ (Нужно убедиться, что эти типы соответствуют тем, что вы ищете в Фазе 2)
+      if (lowerCaseType.includes('давл')) {
+        if (value < min || value > max) {
+          isAlert = true
+          alert_type = value < min ? 'LOW_PRESSURE' : 'HIGH_PRESSURE'
+          message =
+            value < min
+              ? `Давление ниже нормы (${min} ${reading.unit})`
+              : `Давление выше нормы (${max} ${reading.unit})`
+        }
+      } else if (
+        lowerCaseType.includes('температур') ||
+        lowerCaseType.includes('вибрац') ||
+        lowerCaseType.includes('влажн')
+      ) {
+        if (value > max) {
+          isAlert = true
+          alert_type = 'HIGH_VALUE'
+          message = `${reading.sensor_type} превысил порог (${max} ${reading.unit})`
+        }
+      } else if (lowerCaseType.includes('уровня') && value < min) {
+        isAlert = true
+        alert_type = 'LOW_LEVEL'
+        message = `Низкий уровень: ниже ${min} ${reading.unit}`
+      }
+
+      if (isAlert) {
+        const existingActiveAlert = await SensorAlertModel.findOne({
+          sensor_id: sensorId,
+          alert_type: alert_type,
+          resolvedBy: { $exists: false },
+        })
+
+        if (!existingActiveAlert) {
+          console.log(`[ALERT HIT] Creating new alert for ${sensorId}: ${message}`)
+          newAlerts.push({
+            sensor_id: sensorId,
+            alert_type: alert_type,
+            message: message,
+            value: value,
+            timestamp: new Date(),
+            isRead: false,
+            wsection: reading.wsection,
+          })
+        } else {
+          console.log(`[ALERT SKIP] Alert type ${alert_type} for ${sensorId} already active.`)
+        }
+      }
+    }
+
+    // Сохраняем новые тревоги
+    if (newAlerts.length > 0) {
+      await SensorAlertModel.insertMany(newAlerts)
+      console.log(`[ALERT CHECK] Successfully created ${newAlerts.length} new alerts.`)
+    }
+
+    // --- ФАЗА 2: Проверка на СНЯТИЕ тревог (Normalization Check) ---
+
+    // 1. Находим ВСЕ активные, нерешенные тревоги
+    const activeAlerts = await SensorAlertModel.find({ resolvedBy: { $exists: false } }).lean()
+
+    for (const alert of activeAlerts) {
+      // Предполагаем, что sensor_type (используемый для чтения) был сохранен в alert.message
+      // Но для надежности, лучше использовать sensor_id и посмотреть его текущее состояние
+
+      // Находим ТЕКУЩЕЕ показание для этого сенсора по его ID (используя sensor_type, сохраненный в сообщении, или через отдельный запрос, если это сложно)
+
+      // ПРОСТОЕ ПРЕДПОЛОЖЕНИЕ: Берем текущее показание по sensor_id.
+      // Нам нужно знать ТИП сенсора, который вызвал тревогу. Поскольку мы не сохранили sensor_type в alert,
+      // мы ищем его в текущих показаниях по sensor_id.
+
+      const currentReadingMatch = currentReadings.find((r) => r.sensor_id === alert.sensor_id)
+
+      if (!currentReadingMatch) continue
+
+      const value = currentReadingMatch.value
+      const sensorTypeFromReading = currentReadingMatch.sensor_type
+
+      const threshold = thresholdsMap.get(sensorTypeFromReading)
+      if (!threshold) continue
+
+      const min = threshold.min_value
+      const max = threshold.max_value
+
+      let shouldResolve = false
+
+      // --- ЛОГИКА СНЯТИЯ ТРЕВОГИ ---
+
+      if (alert.alert_type === 'HIGH_VALUE') {
+        // Если тревога была вызвана превышением MAX, снимаем, если V <= MAX
+        if (value <= max) {
+          shouldResolve = true
+        }
+      } else if (alert.alert_type === 'LOW_PRESSURE' || alert.alert_type === 'LOW_LEVEL') {
+        // Если тревога была вызвана падением MIN, снимаем, если V >= MIN
+        if (value >= min) {
+          shouldResolve = true
+        }
+      }
+      // Добавить сюда другие типы, если они есть
+
+      if (shouldResolve) {
+        resolvedAlertIds.push(alert._id)
+        console.log(`[ALERT RESOLVED] Alert ${alert._id} for ${alert.sensor_id} returned to normal range.`)
+      }
+    }
+
+    // 3. Обновляем решенные тревоги
+    if (resolvedAlertIds.length > 0) {
+      await SensorAlertModel.updateMany(
+        { _id: { $in: resolvedAlertIds } },
+        {
+          $set: {
+            resolvedBy: 'Система Автоматического Мониторинга',
+            resolvedAt: new Date(),
+          },
+        },
+      )
+      console.log(`[ALERT CHECK] Resolved ${resolvedAlertIds.length} alerts.`)
+    }
+  } catch (error) {
+    console.error('[ALERT CHECK] CRITICAL ERROR during alert generation:', error)
+  }
+}
+
+// --- Шаг 2: Планирование задачи ---
+function startAlertScheduler() {
+  // Планируем выполнение каждые 10 секунд
+  // В синтаксисе cron (секунда, минута, час, день_месяца, месяц, день_недели)
+  // '*/10 * * * * *' означает: каждую 10-ю секунду
+  schedule.scheduleJob('*/10 * * * * *', generateSensorAlerts)
+
+  console.log('[SCHEDULER] Alert generation scheduled to run every 10 seconds.')
 }
 
 // --- Регистрация ---
@@ -301,17 +499,11 @@ app.use((req, res, next) => {
 app.get('/sensor-data', async (req, res) => {
   try {
     if (!req.user || !req.user.access_rights) {
-      // Возвращаем 403, которое Axios ловит как ошибку
       return res.status(403).json({ message: 'Access rights missing in token.' })
     }
 
     const { allowedSections, allowedAssets } = req.user.access_rights
-
-    console.log('User Sections:', allowedSections)
-    console.log('User Assets:', allowedAssets)
-
     if (!allowedSections || allowedSections.length === 0 || !allowedAssets || allowedAssets.length === 0) {
-      // Это вызывает 403 Forbidden, который ловится в React
       return res.status(403).json({ message: 'User has no access rights defined.' })
     }
 
@@ -320,7 +512,6 @@ app.get('/sensor-data', async (req, res) => {
       asset: { $in: allowedAssets },
     }
 
-    // Запрос к новой коллекции истории
     const sensorData = await SensorCurrentStateModel.find(query).lean()
 
     res.status(200).json(sensorData)
@@ -347,15 +538,9 @@ app.get('/api/assets', (req, res) => {
 
 app.get('/api/overview-stats', authenticateToken, async (req, res) => {
   try {
-    // 1. Общее количество сенсоров в коллекции текущих данных
     const totalSensors = await SensorCurrentStateModel.countDocuments({})
+    const activeAlerts = await SensorCurrentStateModel.countDocuments({ value: { $gt: 10 } })
 
-    // 2. Количество предупреждений.
-    const activeAlerts = await SensorCurrentStateModel.countDocuments({
-      value: { $gt: 10 }, //
-    })
-
-    // 3. Время последнего обновления (наиболее свежий timestamp)
     const latestReading = await SensorCurrentStateModel.findOne()
       .sort({ last_updated: -1 })
       .select('last_updated')
@@ -365,7 +550,7 @@ app.get('/api/overview-stats', authenticateToken, async (req, res) => {
 
     res.status(200).json({
       totalSensors,
-      activeAlerts,
+      activeAlerts: activeAlerts,
       lastUpdated,
     })
   } catch (error) {
@@ -782,12 +967,10 @@ app.get('/api/current-state-for-asset', authenticateToken, async (req, res) => {
 
 app.get('/api/thresholds-by-type', authenticateToken, async (req, res) => {
   try {
-    // --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Читаем напрямую из ThresholdByTypeModel ---
     const thresholdList = await ThresholdByTypeModel.find({}).lean()
 
     const thresholdMap = {}
     thresholdList.forEach((item) => {
-      // Предполагаем, что в ThresholdByTypeModelSchema поля называются min_value, max_value, sensor_type
       thresholdMap[item.sensor_type] = {
         min_value: item.min_value,
         max_value: item.max_value,
@@ -803,12 +986,11 @@ app.get('/api/thresholds-by-type', authenticateToken, async (req, res) => {
 })
 
 app.put('/api/config/thresholds-save', authenticateToken, async (req, res) => {
-  // Убедитесь, что только инженеры или администраторы имеют доступ
   if (req.user.profession !== 'engineer' && req.user.profession !== 'admin') {
     return res.status(403).json({ message: 'Доступ запрещен. Только инженеры могут менять настройки.' })
   }
 
-  const updates = req.body // Получаем массив объектов для обновления
+  const updates = req.body
 
   if (!Array.isArray(updates) || updates.length === 0) {
     return res.status(400).json({ message: 'Неверный формат данных.' })
@@ -816,42 +998,35 @@ app.put('/api/config/thresholds-save', authenticateToken, async (req, res) => {
 
   const bulkOperations = updates
     .map((item) => {
-      // Проверяем наличие ключевых полей
       if (!item.sensor_type || item.min_value === undefined || item.max_value === undefined) {
         console.warn('Skipping invalid threshold item:', item)
         return null
       }
 
-      // Операция "найти и обновить, или создать" (upsert)
       return {
         updateOne: {
-          // Ищем по sensor_type
           filter: { sensor_type: item.sensor_type },
-          // Устанавливаем новые min/max значения
           update: {
             $set: {
               min_value: item.min_value,
               max_value: item.max_value,
               updatedAt: new Date(),
+              // NOTE: Мы предполагаем, что unit уже есть в коллекции,
+              // если нет, его нужно добавить в PUT-запрос с фронтенда.
             },
           },
-          upsert: true, // Если запись не найдена, она будет создана
+          upsert: true,
         },
       }
     })
-    .filter((op) => op !== null) // Отфильтровываем недействительные операции
+    .filter((op) => op !== null)
 
   if (bulkOperations.length === 0) {
     return res.status(200).json({ message: 'Нет порогов для обновления.' })
   }
 
   try {
-    // Выполняем массовую запись в коллекцию threshold_by_type_config
     const result = await ThresholdByTypeModel.bulkWrite(bulkOperations)
-
-    // ВАЖНО: После обновления threshold_by_type_config,
-    // данные на фронтенде будут автоматически обновлены при следующем Polling.
-
     res.status(200).json({
       message: 'Настройки порогов по типу успешно обновлены.',
       details: result,
@@ -862,6 +1037,77 @@ app.put('/api/config/thresholds-save', authenticateToken, async (req, res) => {
   }
 })
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`)
+// ПОЛУЧЕНИЕ НЕПРОЧИТАННЫХ/АКТИВНЫХ УВЕДОМЛЕНИЙ
+app.get('/api/alerts/active', authenticateToken, async (req, res) => {
+  try {
+    const { allowedSections, allowedAssets } = req.user.access_rights
+
+    // Если прав нет, вернуть 403 или пустой список
+    if (!allowedSections || allowedSections.length === 0) {
+      return res.status(200).json({ activeAlerts: [], unreadCount: 0 })
+    }
+
+    // --- ФИЛЬТРАЦИЯ ТРЕВОГ ПО ПРАВАМ ДОСТУПА ---
+    const activeAlerts = await SensorAlertModel.find({
+      resolvedBy: { $exists: false }, // Активные = не решенные
+      wsection: { $in: allowedSections }, // <-- НОВЫЙ ФИЛЬТР ПО ЦЕХУ ИЗ JWT
+    })
+      .sort({ timestamp: -1 })
+      .limit(50)
+
+    const unreadCount = await SensorAlertModel.countDocuments({
+      isRead: false,
+      resolvedBy: { $exists: false },
+      wsection: { $in: allowedSections }, // <-- НОВЫЙ ФИЛЬТР ДЛЯ СЧЕТЧИКА
+    })
+    // ------------------------------------------
+
+    res.status(200).json({ activeAlerts, unreadCount })
+  } catch (error) {
+    console.error('Error fetching active alerts:', error)
+    res.status(500).json({ message: 'Ошибка сервера при получении уведомлений.' })
+  }
 })
+
+app.put('/api/alerts/:id/read', authenticateToken, async (req, res) => {
+  try {
+    const alert = await SensorAlertModel.findByIdAndUpdate(req.params.id, { $set: { isRead: true } }, { new: true })
+    if (!alert) return res.status(404).json({ message: 'Уведомление не найдено.' })
+    res.status(200).json({ message: 'Уведомление помечено как прочитанное.', alert })
+  } catch (error) {
+    res.status(500).json({ message: 'Ошибка сервера.' })
+  }
+})
+
+app.put('/api/alerts/:id/resolve', authenticateToken, async (req, res) => {
+  const resolvedBy = req.user.nameU || 'Инженер'
+
+  try {
+    const alert = await SensorAlertModel.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          resolvedBy: resolvedBy,
+          resolvedAt: new Date(),
+        },
+      },
+      { new: true },
+    )
+    if (!alert) return res.status(404).json({ message: 'Уведомление не найдено.' })
+    res.status(200).json({ message: 'Уведомление помечено как решенное.', alert })
+  } catch (error) {
+    res.status(500).json({ message: 'Ошибка сервера.' })
+  }
+})
+
+mongoose
+  .connect(mongoUri)
+  .then(() => {
+    console.log('Connected to MongoDB')
+    startAlertScheduler() // <-- Запуск планировщика после подключения
+
+    app.listen(port, () => {
+      console.log(`Server is running on port ${port}`)
+    })
+  })
+  .catch((err) => console.error('MongoDB connection error:', err))

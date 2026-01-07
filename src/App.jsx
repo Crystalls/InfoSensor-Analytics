@@ -1,4 +1,8 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import { ToastContainer } from 'react-toastify'; 
+import 'react-toastify/dist/ReactToastify.css';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import '@fortawesome/fontawesome-free/css/all.min.css'
 import { BrowserRouter as Router, Route, Routes, Navigate, useNavigate } from 'react-router-dom';
 import RegistrationForm from './components/Registration/RegistrationForm';
 import LoginForm from './components/Login/LoginForm';
@@ -12,6 +16,9 @@ import AssetRegistry from './components/Dashboard/AssetRegistry';
 import OverviewDashboard from './components/Dashboard/OverviewDashboard';
 import AssetDetailView from './components/Dashboard/AssetDetailView'
 import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard';
+import AlertsDropdown from './components/AlertList/AlertsDropdown';
+
+
 import './App.css'
 import axios from 'axios';
 import { API_BASE_URL } from './services/api';
@@ -145,7 +152,12 @@ function App() {
         <Router>
             <div className='App'>
                 {/* Navbar получает isLoggedIn User и handleLogout */}
-                <Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout} user={user} />
+                <Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout} user={user} token={token} />
+                      <ToastContainer
+                        position="bottom-right" // Расположение: правый верхний угол
+                        autoClose={5000}     // Закрытие через 5 секунд
+                        limit={5}            // Максимальное количество одновременных уведомлений
+                    />
                 <div className='content'>
                     <Routes>
                         {/* Корневой роут, который перенаправляет в зависимости от статуса логина */}

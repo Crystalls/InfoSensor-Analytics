@@ -1,10 +1,24 @@
 * {
-    margin: 0;
-    padding: 0;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-    background-color: #28262C;
-    color: #fff;
+  background-color: #28262c !important;
+  color: #fff;
 }
 
+p {
+  color: #cfd8cf !important;
+}
+
+.modal-content {
+  background-color: #383838; /* Темно-серый, непрозрачный */
+  color: #e0e0e0; /* Светлый текст */
+  border: none;
+  position: relative;
+}
+
+.text-muted {
+  color: #fff !important;
+}

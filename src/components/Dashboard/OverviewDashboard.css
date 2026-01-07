@@ -13,13 +13,13 @@ h1 {
 .lead {
   font-size: 1.25rem;
   text-align: center;
-  color: #ff7d7d;
+  color: #ff7d7d !important;
 }
 
 .text-primary {
   font-size: 2rem;
   text-align: center;
-  color: #b8b5b5;
+  color: #b8b5b5 !important;
 }
 
 .row {
@@ -62,11 +62,11 @@ h1 {
 }
 
 .text-success {
-  color: #28a745; /* Зеленый цвет для успешных значений */
+  color: #28a745 !important; /* Зеленый цвет для успешных значений */
 }
 
 .text-danger {
-  color: #dc3545; /* Красный цвет для опасных значений */
+  color: #dc3545 !important; /* Красный цвет для опасных значений */
 }
 
 .alert {

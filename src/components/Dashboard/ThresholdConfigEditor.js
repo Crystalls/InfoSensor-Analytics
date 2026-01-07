@@ -93,7 +93,7 @@ const ThresholdConfigEditor = ({ assetName, token, onClose, initialConfigs }) =>
   }
 
   return (
-    <div className='modal-backdrop show d-block'>
+    <div className='custom-modal-backdrop'>
       <div
         className='modal fade show'
         style={{ display: 'block' }}

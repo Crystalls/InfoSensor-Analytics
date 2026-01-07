@@ -25,20 +25,21 @@ const AnalyticsDashboard = ({ user, token }) => {
   const [assetSensorMap, setAssetSensorMap] = useState({})
   const [thresholdsByTypeMap, setThresholdsByTypeMap] = useState({})
 
-  // Ref для интервала текущего состояния
   const currentStateIntervalRef = useRef(null)
 
   const allowedAssets = user?.access_rights?.allowedAssets || []
 
   const today = moment().format('YYYY-MM-DD')
-  const MonthsAgo = moment().subtract(1, 'months').format('YYYY-MM-DD')
+  const threeMonthsAgo = moment().subtract(1, 'month').format('YYYY-MM-DD')
 
   const [selectedAsset, setSelectedAsset] = useState(allowedAssets[0] || '')
   const [selectedSensor, setSelectedSensor] = useState('')
-  const [startDate, setStartDate] = useState(MonthsAgo)
+  const [startDate, setStartDate] = useState(threeMonthsAgo)
   const [endDate, setEndDate] = useState(today)
 
-  // --- ФУНКЦИИ ЗАГРУЗКИ (СТАБИЛЬНЫЕ) ---
+  const [chartUpdateTrigger, setChartUpdateTrigger] = useState(0)
+
+  // --- ФУНКЦИИ ЗАГРУЗКИ (Остаются стабильными) ---
 
   const fetchFilterOptions = useCallback(async () => {
     if (!token) {
@@ -54,8 +55,15 @@ const AnalyticsDashboard = ({ user, token }) => {
 
       const assetsFromMap = Object.keys(map)
 
-      if (assetsFromMap.length > 0 && !selectedAsset) {
-        setSelectedAsset(assetsFromMap[0])
+      if (assetsFromMap.length > 0) {
+        const initialAsset = selectedAsset || assetsFromMap[0]
+        setSelectedAsset(initialAsset)
+        const sensorsForInitialAsset = map[initialAsset]
+        if (sensorsForInitialAsset && sensorsForInitialAsset.length > 0) {
+          // Устанавливаем первый сенсор в качестве выбранного
+          const initialSensorId = selectedSensor || sensorsForInitialAsset[0].id
+          setSelectedSensor(initialSensorId)
+        }
       }
     } catch (err) {
       console.error('Error fetching filter options:', err)
@@ -104,7 +112,7 @@ const AnalyticsDashboard = ({ user, token }) => {
       console.warn('Could not fetch current state for asset:', selectedAsset)
       setCurrentStateData([])
     }
-  }, [token, selectedAsset]) // Зависит от selectedAsset
+  }, [token, selectedAsset])
 
   // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
@@ -119,54 +127,67 @@ const AnalyticsDashboard = ({ user, token }) => {
       return {
         min: parseFloat(config.min_value) || 0,
         max: parseFloat(config.max_value) || 100,
-        // Возвращаем Type и ID для отображения
         title: `${sensorType} (${sensorId})`,
       }
     }
-    return { min: 0, max: 100 }
+    return { min: 0, max: 100, title: sensorId }
   }
 
   // --- ЭФФЕКТЫ И POLLING ---
 
-  // Эффект 1: Загрузка фильтров и порогов (запускается один раз)
+  // Эффект 1: Загрузка фильтров и порогов
   useEffect(() => {
     fetchFilterOptions()
     fetchAllThresholds()
   }, [fetchFilterOptions, fetchAllThresholds])
 
-  // Эффект 2: POLLING ТЕКУЩЕГО СОСТОЯНИЯ
+  // Эффект 2: POLLING ТЕКУЩЕГО СОСТОЯНИЯ (Status Gauge)
   useEffect(() => {
-    // Очистка старого интервала
     if (currentStateIntervalRef.current) {
       clearInterval(currentStateIntervalRef.current)
     }
 
     if (selectedAsset && token) {
-      // 1. Запуск первого запроса
       fetchCurrentState()
 
-      // 2. Установка интервала
       currentStateIntervalRef.current = setInterval(() => {
         fetchCurrentState()
       }, 5000)
     }
 
-    // 3. Очистка при смене selectedAsset или при размонтировании
     return () => {
       if (currentStateIntervalRef.current) {
         clearInterval(currentStateIntervalRef.current)
       }
     }
-  }, [selectedAsset, token, fetchCurrentState]) // Перезапускается только при смене Актива
+  }, [selectedAsset, token, fetchCurrentState])
 
-  // Эффект 3: Запуск запроса графика (запускается при смене фильтров)
+  // ЭФФЕКТ 3: Запуск графика при первом выборе сенсора И по триггеру
   useEffect(() => {
-    if (selectedAsset && selectedSensor && startDate && endDate) {
+    // Запускаем, только если триггер активен И все фильтры установлены
+    if (chartUpdateTrigger > 0 && selectedAsset && selectedSensor) {
       fetchChartData()
     }
-  }, [selectedAsset, selectedSensor, startDate, endDate, fetchChartData])
+  }, [chartUpdateTrigger, fetchChartData])
 
-  // Обработчик смены Актива
+  // НОВЫЙ ЭФФЕКТ: Запуск триггера при первой загрузке
+  useEffect(() => {
+    // Если selectedSensor только что появился и триггер еще не был запущен
+    if (selectedSensor && chartUpdateTrigger === 0) {
+      setChartUpdateTrigger(1)
+    }
+  }, [selectedSensor, chartUpdateTrigger])
+
+  // Обработчик нажатия кнопки "Обновить График"
+  const handleChartUpdateClick = () => {
+    if (selectedAsset && selectedSensor) {
+      // Если график уже загружался (trigger > 0), просто увеличиваем его.
+      // Если нет (trigger === 0), он станет 1 и запустит fetchChartData.
+      setChartUpdateTrigger((prev) => prev + 1)
+    }
+  }
+
+  // Обработчик смены Актива (не запускает график автоматически)
   const handleAssetChange = (newAsset) => {
     setSelectedAsset(newAsset)
     setSelectedSensor('')
@@ -194,9 +215,9 @@ const AnalyticsDashboard = ({ user, token }) => {
 
     let color = '#28a745'
     if (value > maxThreshold || value < minThreshold) {
-      color = '#dc3545' // Красная тревога
+      color = '#dc3545'
     } else if (value >= maxThreshold * 0.95 && value < maxThreshold) {
-      color = '#ffc107' // Желтый: близко к максимуму
+      color = '#ffc107'
     }
 
     const gaugeData = [{ name: 'Status', value: normalizedValue, fill: color }]
@@ -226,7 +247,6 @@ const AnalyticsDashboard = ({ user, token }) => {
             startAngle={90}
             endAngle={-270}
           >
-            {/* Убрали label, чтобы скрыть "100" */}
             <RadialBar
               minAngle={15}
               background={{ fill: '#3a3a40' }}
@@ -259,7 +279,6 @@ const AnalyticsDashboard = ({ user, token }) => {
   // --- РЕНДЕРИНГ ---
   return (
     <div className='container mt-4'>
-      {/* ... (JSX остается прежним) ... */}
       <h1>Аналитические Графики</h1>
       <p
         className='lead text-muted'
@@ -283,7 +302,9 @@ const AnalyticsDashboard = ({ user, token }) => {
             ))}
           </div>
         ) : (
+          // Класс row и col-* обеспечивает правильное позиционирование
           <div className='row g-3 align-items-end'>
+            {/* Актив (col-md-3) */}
             <div className='col-md-3'>
               <label className='form-label text-light'>Актив:</label>
               <select
@@ -303,6 +324,7 @@ const AnalyticsDashboard = ({ user, token }) => {
               </select>
             </div>
 
+            {/* Сенсор (col-md-3) */}
             <div className='col-md-3'>
               <label className='form-label text-light'>Сенсор:</label>
               <select
@@ -319,7 +341,6 @@ const AnalyticsDashboard = ({ user, token }) => {
                       key={sensor.id}
                       value={sensor.id}
                     >
-                      {' '}
                       {sensor.type} ({sensor.id})
                     </option>
                   ))
@@ -327,6 +348,7 @@ const AnalyticsDashboard = ({ user, token }) => {
               </select>
             </div>
 
+            {/* Начальная Дата (col-md-2) */}
             <div className='col-md-2'>
               <label className='form-label text-light'>Начальная Дата:</label>
               <input
@@ -336,6 +358,8 @@ const AnalyticsDashboard = ({ user, token }) => {
                 onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
+
+            {/* Конечная Дата (col-md-2) */}
             <div className='col-md-2'>
               <label className='form-label text-light'>Конечная Дата:</label>
               <input
@@ -346,10 +370,18 @@ const AnalyticsDashboard = ({ user, token }) => {
               />
             </div>
 
+            {/* Кнопка (col-md-2) */}
             <div className='col-md-2'>
+              {/* Добавляем пустую метку или отступ, чтобы кнопка выровнялась по нижнему краю */}
+              <label
+                className='form-label'
+                style={{ opacity: 0, height: '0.9rem' }}
+              >
+                _
+              </label>
               <button
                 className='btn btn-primary w-100'
-                onClick={fetchChartData}
+                onClick={handleChartUpdateClick}
                 disabled={loading || !selectedSensor || !selectedAsset}
               >
                 {loading ? 'Загрузка...' : 'Обновить График'}
@@ -367,7 +399,7 @@ const AnalyticsDashboard = ({ user, token }) => {
         className='card p-3 chart-container'
         style={{ border: 'none', height: '400px', marginBottom: '20px' }}
       >
-        {chartData.length > 0 && !loading ? (
+        {chartData.length > 0 && chartUpdateTrigger > 0 && !loading ? (
           <ResponsiveContainer
             width='100%'
             height='100%'
@@ -412,15 +444,17 @@ const AnalyticsDashboard = ({ user, token }) => {
             className='text-center text-warning'
             style={{ paddingTop: '150px' }}
           >
-            Нет исторических данных для выбранных параметров. Проверьте диапазон дат.
+            {chartUpdateTrigger === 0
+              ? 'Выберите сенсор и нажмите "Обновить График".'
+              : 'Нет исторических данных для выбранных параметров.'}
           </p>
         )}
       </div>
 
-      {/* --- ГРАФИК 2: ТЕКУЩЕЕ СОСТОЯНИЕ (Gauge Chart - только для выбранного сенсора) --- */}
+      {/* --- ГРАФИК 2: ТЕКУЩЕЕ СОСТОЯНИЕ (Gauge Chart) --- */}
       {selectedSensor && currentStateData.length > 0 && (
         <div className='row g-3 mt-3'>
-          <h4 className='text-light mb-3'>Текущий статус сенсора:</h4>
+          <h4 className='text-light mb-3'>Текущий Статус Сенсора: {selectedSensor}</h4>
 
           {currentStateData
             .filter((item) => item.sensor_id === selectedSensor)

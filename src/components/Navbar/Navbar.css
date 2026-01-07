@@ -3,10 +3,10 @@
 }
 
 :root {
-  --bg-color: #1f2522; /* Цвет фона */
-  --text-color: #e6e7e8; /* Цвет текста */
-  --accent-color: #6fbf82; /* Акцентный цвет для ссылок */
-  --hover-bg-color: rgba(111, 191, 130, 0.1); /* Цвет фона при наведении */
+  --bg-color: #1f2522 !important; /* Цвет фона */
+  --text-color: #e6e7e8 !important; /* Цвет текста */
+  --accent-color: #6fbf82 !important; /* Акцентный цвет для ссылок */
+  --hover-bg-color: rgba(111, 191, 130, 0.1) !important; /* Цвет фона при наведении */
   --header-height: 64px; /* Высота заголовка */
 }
 
@@ -49,7 +49,8 @@
 
 .links a,
 .login_links a,
-.logout_btn {
+.logout_btn,
+.profile_btn {
   color: var(--text-color);
   text-decoration: none;
   padding: 10px 15px;
@@ -65,6 +66,13 @@
 }
 
 .logout_btn {
+  border: none;
+  background-color: transparent; /* Убираем фон у кнопки */
+  cursor: pointer;
+  font-size: 16px; /* Размер шрифта для кнопки выхода */
+}
+
+.profile.btn {
   border: none;
   background-color: transparent; /* Убираем фон у кнопки */
   cursor: pointer;
@@ -99,7 +107,8 @@
 
   .links a,
   .login_links a,
-  .logout_btn {
+  .logout_btn,
+  .profile_btn {
     width: 100%; /* Кнопки занимают всю ширину */
     text-align: center; /* Центрируем текст */
     padding: 15px 0; /* Увеличиваем вертикальные отступы для кнопок */
@@ -120,4 +129,158 @@ header li a:active {
   100% {
     box-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
   }
+}
+
+/* Контейнер для колокольчика, имени и кнопки */
+.user_actions_logged_in {
+  display: flex;
+  align-items: center;
+  /* Разделяет элементы (колокольчик, имя, кнопка) */
+  gap: 15px;
+}
+
+.user-name {
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+/* --- Стили для AlertsDropdown.jsx --- */
+
+.alerts-dropdown-container {
+  position: relative;
+  /* Убеждаемся, что Dropdown позиционируется относительно этого контейнера */
+}
+
+.alerts-icon-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color);
+  padding: 0;
+  font-size: 1.2rem; /* Размер иконки */
+  position: relative; /* Для позиционирования бейджа */
+}
+
+/* Стиль для бейджа (красный кружок с числом) */
+.alert-count-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background-color: #dc3545; /* Красный */
+  color: white;
+  font-size: 0.7rem;
+  padding: 2px 5px;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+/* --- Dropdown Menu Styles --- */
+
+.alerts-menu {
+  /* Скрыто по умолчанию */
+  display: none;
+
+  /* Позиционирование */
+  position: absolute;
+  top: 100%; /* Начинается под кнопкой */
+  right: 0; /* Прижимается к правому краю */
+
+  width: 350px; /* Фиксированная ширина */
+  z-index: 1000; /* Поверх всего */
+
+  background-color: #1e1e1e; /* Темный фон */
+  border: 1px solid #444;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+  overflow: hidden; /* Чтобы содержимое не выходило за границы */
+}
+
+.alerts-menu.show {
+  display: block; /* Показать при наличии класса 'show' */
+}
+
+.alerts-header {
+  color: #ffc107; /* Желтый/Предупреждающий цвет */
+  padding: 10px 15px;
+  border-bottom: 1px solid #333;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+/* Список уведомлений */
+.alerts-list-scroll {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.alert-item {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 15px;
+  border-bottom: 1px solid #333;
+  color: white;
+  line-height: 1.4;
+  transition: background-color 0.2s;
+}
+
+.alert-item:hover {
+  background-color: #303030;
+  cursor: pointer;
+}
+
+.alert-item.unread {
+  background-color: #303030; /* Чуть темнее фон для непрочитанных */
+}
+
+.alert-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 5px;
+}
+
+.alert-message {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.alert-time {
+  color: #aaa;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.alert-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Кнопка Решить */
+.btn-resolve {
+  background: none;
+  border: 1px solid #28a745;
+  color: #28a745;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-resolve:hover {
+  background: #28a745;
+  color: white;
+}
+
+.alerts-footer-link {
+  padding: 10px 15px;
+  border-top: 1px solid #333;
+  text-align: center;
+}
+
+.alerts-footer-link a {
+  color: #17a2b8; /* Цвет ссылки */
+  text-decoration: none;
+  font-size: 0.9rem;
 }

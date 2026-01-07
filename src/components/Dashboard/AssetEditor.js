@@ -34,7 +34,10 @@ const AssetEditor = ({ assetData, token, onClose, onUpdateSuccess }) => {
   }
 
   return (
-    <div className='modal-backdrop show d-block'>
+    <div
+      className='custom-modal-backdrop'
+      style={{ color: '#fff' }}
+    >
       <div
         className='modal fade show'
         style={{ display: 'block' }}

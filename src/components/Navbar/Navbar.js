@@ -2,8 +2,9 @@ import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import '../Navbar/Navbar.css'
 import logo from '../../img/logo.png'
+import AlertsDropdown from '../AlertList/AlertsDropdown'
 
-function Navbar({ isLoggedIn, onLogout, user }) {
+function Navbar({ isLoggedIn, onLogout, user, token }) {
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -34,18 +35,17 @@ function Navbar({ isLoggedIn, onLogout, user }) {
 
             {isLoggedIn && (
               <>
-                {/* Общий обзор */}
                 <li>
                   <Link to='/overview'>Обзор Системы</Link>
+                </li>
+                <li>
                   <Link to='/assets'>Реестр Активов</Link>
                 </li>
-                {/* ДИНАМИЧЕСКАЯ НАВИГАЦИЯ ПО РОЛИ */}
                 {user?.profession === 'engineer' && (
                   <li>
                     <Link to='/dashboard-engineer'>Обзорная панель инженера</Link>
                   </li>
                 )}
-
                 {user?.profession === 'scientist' && (
                   <li>
                     <Link to='/dashboard-scientist'>Обзорная панель ученого</Link>
@@ -58,21 +58,36 @@ function Navbar({ isLoggedIn, onLogout, user }) {
             )}
           </ul>
         </div>
-        <div className='login_links'>
-          <ul>
-            {!isLoggedIn && (
-              <>
+
+        {/* --- СЕКЦИЯ ДЕЙСТВИЙ ПОЛЬЗОВАТЕЛЯ (Используем d-flex) --- */}
+        <div className='user_actions'>
+          {!isLoggedIn ? (
+            <div className='login_links'>
+              <ul>
                 <li>
                   <Link to='/register'>Зарегистрироваться</Link>
                 </li>
                 <li>
                   <Link to='/login'>Войти</Link>
                 </li>
-              </>
-            )}
-            {isLoggedIn && (
-              <>
-                <li style={{ marginRight: '15px', color: 'white' }}>{user?.nameU}</li>
+              </ul>
+            </div>
+          ) : (
+            // Flex-контейнер для выравнивания колокольчика, имени и кнопки
+            <div className='d-flex align-items-center'>
+              {/* 1. КОЛОКОЛЬЧИК (Margin Right для отступа) */}
+              <div className='me-3'>
+                <AlertsDropdown token={token} />
+              </div>
+
+              {/* 2. Имя пользователя и Выход */}
+              <ul className='d-flex mb-0 p-0 list-unstyled'>
+                <li
+                  className='profile_btn'
+                  style={{ color: 'white' }}
+                >
+                  {user?.nameU}
+                </li>
                 <li>
                   <button
                     className='logout_btn'
@@ -81,10 +96,11 @@ function Navbar({ isLoggedIn, onLogout, user }) {
                     Выйти
                   </button>
                 </li>
-              </>
-            )}
-          </ul>
+              </ul>
+            </div>
+          )}
         </div>
+        {/* ----------------------------------------------------- */}
       </div>
     </header>
   )

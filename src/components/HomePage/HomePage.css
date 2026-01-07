@@ -4,9 +4,9 @@
 }
 
 .HomePage-header {
-  background-color: #282c34;
+  background-color: #282c34 !important;
   padding: 20px;
-  color: white;
+  color: white !important;
 }
 
 .maininfo {
@@ -34,7 +34,7 @@ section h2 {
 }
 
 .action-button {
-  background-color: #007bff; /* Цвет фона кнопки */
+  background-color: #007bff !important; /* Цвет фона кнопки */
   color: white; /* Цвет текста кнопки */
   border: none; /* Убираем границу */
   padding: 10px 20px; /* Отступы */
@@ -44,5 +44,5 @@ section h2 {
 }
 
 .action-button:hover {
-  background-color: #0056b3; /* Цвет фона при наведении */
+  background-color: #0056b3 !important; /* Цвет фона при наведении */
 }
