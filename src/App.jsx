@@ -17,6 +17,8 @@ import OverviewDashboard from './components/Dashboard/OverviewDashboard';
 import AssetDetailView from './components/Dashboard/AssetDetailView'
 import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard';
 import AlertsDropdown from './components/AlertList/AlertsDropdown';
+import ReportGenerator from './components/ReportGenerator/ReportGenerator';
+import NotificationCenter from './components/AlertList/NotificationCenter';
 
 
 import './App.css'
@@ -224,6 +226,18 @@ function App() {
                                     <AnalyticsDashboard />
                                 </PrivateRoute>
                             }
+                        />
+                        <Route
+                            path="/reports"
+                            element={
+                                <PrivateRoute>
+                                    <ReportGenerator />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/notifications"
+                            element={ <NotificationCenter user={user} token={token} /> }
                         />
                         
                         <Route path="*" element={<h1>404 - Not Found</h1>} />

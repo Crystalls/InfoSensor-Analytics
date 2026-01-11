@@ -33,12 +33,36 @@ function AlertValue({ sensorType, value, alertThreshold, alertMessage, unit }) {
         isAlert = true
       }
     }
+  } else if (lowerCaseType.includes('температур почв')) {
+    // ТРЕВОГА: value < MIN или value > MAX
+    if (isMinValid && isMaxValid) {
+      if (value < minThreshold || value > maxThreshold) {
+        isAlert = true
+      }
+    }
+  } else if (lowerCaseType.includes('кислот')) {
+    // ТРЕВОГА: value < MIN или value > MAX
+    if (isMinValid && isMaxValid) {
+      if (value < minThreshold || value > maxThreshold) {
+        isAlert = true
+      }
+    }
   } else if (lowerCaseType.includes('уровня')) {
     // ТРЕВОГА: value < MIN
     if (isMinValid && value < minThreshold) {
       isAlert = true
     }
   } else if (lowerCaseType.includes('вибрац')) {
+    // ТРЕВОГА: value > MAX
+    if (isMaxValid && value > maxThreshold) {
+      isAlert = true
+    }
+  } else if (lowerCaseType.includes('солен')) {
+    // ТРЕВОГА: value > MAX
+    if (isMaxValid && value > maxThreshold) {
+      isAlert = true
+    }
+  } else if (lowerCaseType.includes('углекисл')) {
     // ТРЕВОГА: value > MAX
     if (isMaxValid && value > maxThreshold) {
       isAlert = true

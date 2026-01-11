@@ -26,7 +26,7 @@ SIMULATION_SCENARIOS = {
         "wsection": "Цех №2",        # Доступно инженеру в Цехе №2
         "asset": "Двигатель 1",      # Объект внутри Цеха №2
         "type": "temperature",
-        "params": {"mean": 29.73, "std_dev": 6.0, "unit": "°C"},
+        "params": {"mean": 29.73, "std_dev": 6.0, "unit": "гр Цельсия"},
     },
     "ENG_WORKSHOP2_ENGINE_1_PRESSURE": {
         "sensor_id": "SNSR-002", 
@@ -51,12 +51,48 @@ SIMULATION_SCENARIOS = {
     # --- Сценарий для Ученого (Поле А) ---
     "SCI_A_FIELD_A_MOISTURE": {
         "sensor_id": "SNSR-010",
-        "sensor_type": "Датчик влажности",
+        "sensor_type": "Датчик влажности почвы",
         "role": "scientist",
         "wsection": "Поле А",
-        "asset": "Почва (Сектор 1)",  # Объект внутри Поля А
+        "asset": "Почва поля",  # Объект внутри Поля А
         "type": "moisture",
-        "params": {"mean": 45.0, "std_dev": 5.0, "unit": "%"},
+        "params": {"mean": 78.0, "std_dev": 5.0, "unit": "%"},
+    },
+    "SCI_A_FIELD_A_TEMP": {
+        "sensor_id": "SNSR-0109",
+        "sensor_type": "Датчик температуры почвы",
+        "role": "scientist",
+        "wsection": "Поле А",
+        "asset": "Почва поля",  # Объект внутри Поля А
+        "type": "temperature",
+        "params": {"mean": 27.0, "std_dev": 9.0, "unit": "гр Цельсия"},
+    },
+        "SCI_A_FIELD_A_ACID": {
+        "sensor_id": "SNSR-0239",
+        "sensor_type": "Датчик кислотности почвы",
+        "role": "scientist",
+        "wsection": "Поле А",
+        "asset": "Почва поля",  # Объект внутри Поля А
+        "type": "acid",
+        "params": {"mean": 4.6, "std_dev": 0.5, "unit": "pH"},
+    },
+        "SCI_A_FIELD_A_SALINITY": {
+        "sensor_id": "SNSR-0176",
+        "sensor_type": "Датчик соленности почвы",
+        "role": "scientist",
+        "wsection": "Поле А",
+        "asset": "Почва поля",  # Объект внутри Поля А
+        "type": "salinity",
+        "params": {"mean": 8.6, "std_dev": 1.5, "unit": "мСм/см"},
+    },
+        "SCI_A_FIELD_A_CARBONDIOXID": {
+        "sensor_id": "SNSR-0176",
+        "sensor_type": "Датчик углекислого газа",
+        "role": "scientist",
+        "wsection": "Поле А",
+        "asset": "Теплица",  # Объект внутри Поля А
+        "type": "carbon_dioxide",
+        "params": {"mean": 1900, "std_dev": 450, "unit": "кг/га"},
     },
         # --- Сценарий для Инженера (Цех №1) ---
     "ENG_WORKSHOP1_PUMP_1_TEMP": {
@@ -66,7 +102,7 @@ SIMULATION_SCENARIOS = {
         "wsection": "Цех №1",        # Доступно инженеру в Цехе №2
         "asset": "Насосная станция",      # Объект внутри Цеха №2
         "type": "temperature",
-        "params": {"mean": 29.73, "std_dev": 1.0, "unit": "°C"},
+        "params": {"mean": 29.73, "std_dev": 1.0, "unit": "гр Цельсия"},
     },
     "ENG_WORKSHOP1_TURNING MACHINE_1_PRESSURE": {
         "sensor_id": "SNSR-0202", 

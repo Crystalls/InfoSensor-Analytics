@@ -6,18 +6,29 @@ const mongoose = require('mongoose')
 const { v4: uuidv4 } = require('uuid')
 const { check, validationResult } = require('express-validator')
 const schedule = require('node-schedule')
+const { Parser } = require('json2csv')
+const ExcelJS = require('exceljs')
+const PDFDocument = require('pdfkit')
+const moment = require('moment')
+const path = require('path')
+const { type } = require('os')
+require('moment/locale/ru')
 
 const app = express()
 const port = 3001
 
-app.use(cors())
+app.use(
+  cors({
+    exposedHeaders: ['Content-Disposition'],
+  }),
+)
 app.use(express.json())
 
 // --- 1. КОНФИГУРАЦИЯ ДОСТУПА (Справочник активов на основе Цеха) ---
 const ASSET_REGISTRY = {
   'Цех №2': ['Двигатель 1', 'Станок 5', 'Насосная Станция'],
-  'Поле А': ['Почва (Сектор 1)', 'Теплица 101'],
-  'Цех №1': ['Токарный станок', 'Станок ЧПУ', 'Паровой станок'],
+  'Поле А': ['Почва поля', 'Теплица'],
+  'Цех №1': ['Токарный станок', 'Станок ЧПУ', 'Паровой станок', 'Насосная Станция', 'Станок 5'],
 }
 
 // соединение с MongoDB
@@ -97,6 +108,7 @@ const sensorAlertsSchema = new mongoose.Schema({
   resolvedBy: { type: String },
   resolvedAt: { type: Date, default: Date.now },
   wsection: { type: String, required: true },
+  asset: { type: String, required: true },
 })
 
 sensorAlertsSchema.index(
@@ -173,6 +185,16 @@ function authenticateToken(req, res, next) {
   })
 }
 
+async function isAssetCollectionEmpty() {
+  try {
+    const count = await AssetModel.estimatedDocumentCount()
+    return count === 0
+  } catch (e) {
+    console.error('Error checking asset collection count:', e)
+    return true // В случае ошибки, предполагаем, что она пуста
+  }
+}
+
 /**
  * Функция генерации тревог: Сравнивает текущие показания с порогами и сохраняет новые записи в БД.
  */
@@ -225,10 +247,30 @@ async function generateSensorAlerts() {
               ? `Давление ниже нормы (${min} ${reading.unit})`
               : `Давление выше нормы (${max} ${reading.unit})`
         }
+      } else if (lowerCaseType.includes('температур почв')) {
+        if (value < min || value > max) {
+          isAlert = true
+          alert_type = value < min ? 'LOW_TEMPSOIL' : 'HIGH_TEMPSOIL'
+          message =
+            value < min
+              ? `Температура почвы ниже нормы (${min} ${reading.unit})`
+              : `Температура почвы выше нормы (${max} ${reading.unit})`
+        }
+      } else if (lowerCaseType.includes('кислот')) {
+        if (value < min || value > max) {
+          isAlert = true
+          alert_type = value < min ? 'LOW_ACID' : 'HIGH_ACID'
+          message =
+            value < min
+              ? `Кислотность почвы ниже нормы (${min} ${reading.unit})`
+              : `Кислотность почвы выше нормы (${max} ${reading.unit})`
+        }
       } else if (
         lowerCaseType.includes('температур') ||
         lowerCaseType.includes('вибрац') ||
-        lowerCaseType.includes('влажн')
+        lowerCaseType.includes('влажн') ||
+        lowerCaseType.includes('солен') ||
+        lowerCaseType.includes('углекисл')
       ) {
         if (value > max) {
           isAlert = true
@@ -258,6 +300,7 @@ async function generateSensorAlerts() {
             timestamp: new Date(),
             isRead: false,
             wsection: reading.wsection,
+            asset: reading.asset,
           })
         } else {
           console.log(`[ALERT SKIP] Alert type ${alert_type} for ${sensorId} already active.`)
@@ -303,12 +346,22 @@ async function generateSensorAlerts() {
 
       // --- ЛОГИКА СНЯТИЯ ТРЕВОГИ ---
 
-      if (alert.alert_type === 'HIGH_VALUE') {
+      if (
+        alert.alert_type === 'HIGH_VALUE' ||
+        alert.alert_type === 'HIGH_ACID' ||
+        alert.alert_type === 'HIGH_TEMPSOIL' ||
+        alert.alert_type === 'HIGH_PRESSURE'
+      ) {
         // Если тревога была вызвана превышением MAX, снимаем, если V <= MAX
         if (value <= max) {
           shouldResolve = true
         }
-      } else if (alert.alert_type === 'LOW_PRESSURE' || alert.alert_type === 'LOW_LEVEL') {
+      } else if (
+        alert.alert_type === 'LOW_PRESSURE' ||
+        alert.alert_type === 'LOW_ACID' ||
+        alert.alert_type === 'LOW_TEMPSOIL' ||
+        alert.alert_type === 'LOW_LEVEL'
+      ) {
         // Если тревога была вызвана падением MIN, снимаем, если V >= MIN
         if (value >= min) {
           shouldResolve = true
@@ -521,6 +574,67 @@ app.get('/sensor-data', async (req, res) => {
   }
 })
 
+app.post('/api/assets', authenticateToken, async (req, res) => {
+  // Проверка прав доступа
+  if (req.user.profession !== 'engineer' && req.user.profession !== 'admin' && req.user.profession !== 'scientist') {
+    return res.status(403).json({ message: 'Доступ запрещен. Только инженеры могут создавать активы.' })
+  }
+
+  const { assetName, workshop, responsibleWorker } = req.body
+
+  // 2. Дополнительная проверка: Если коллекция пуста, мы разрешаем создание, чтобы инициализировать систему.
+  const collectionIsEmpty = await isAssetCollectionEmpty()
+  const canCreate = collectionIsEmpty || req.user.access_rights.allowedSections.includes(req.body.workshop)
+
+  if (!canCreate) {
+    return res.status(403).json({ message: `Вы не авторизованы для создания активов в цеху "${req.body.workshop}".` })
+  }
+
+  if (!assetName || !workshop) {
+    return res.status(400).json({ message: 'Имя актива и цех обязательны.' })
+  }
+
+  // Дополнительная проверка на соответствие цеха правам доступа (опционально)
+  if (!req.user.access_rights.allowedSections.includes(workshop)) {
+    return res.status(403).json({ message: `Вы не авторизованы для создания активов в цеху "${workshop}".` })
+  }
+
+  try {
+    // --- 1. СТАНДАРТНЫЙ НАБОР СЕНСОРОВ ДЛЯ НОВОГО АКТИВА ---
+    // Используем очищенное имя для ID сенсоров
+    const baseName = assetName.replace(/[^a-zA-Z0-9]/g, '')
+
+    // ----------------------------------------------------
+
+    // Проверяем, существует ли актив с таким именем
+    const existingAsset = await AssetModel.findOne({ assetName })
+    if (existingAsset) {
+      return res.status(400).json({ message: `Актив с именем "${assetName}" уже существует.` })
+    }
+
+    const newAsset = new AssetModel({
+      assetName,
+      workshop,
+      responsibleWorker: responsibleWorker || req.user.nameU,
+    })
+
+    await newAsset.save()
+
+    // --- 2. ИНИЦИАЛИЗАЦИЯ ДАННЫХ В SensorCurrentState и SensorDataHistory ---
+    // Вызываем функцию, которая вставляет начальные записи
+    await initializeNewAssetSensors(newAsset)
+
+    res.status(201).json({ message: 'Актив успешно создан.', asset: newAsset })
+  } catch (error) {
+    console.error('Error creating new asset:', error)
+    // MongoDB duplicate key error (хотя мы уже проверили findOne)
+    if (error.code === 11000) {
+      return res.status(400).json({ message: `Актив с именем "${assetName}" уже существует (Ошибка БД).` })
+    }
+    res.status(500).json({ message: 'Ошибка сервера при создании актива.' })
+  }
+})
+
 app.get('/api/assets', (req, res) => {
   // Middleware уже проверил токен, поэтому req.user существует
   if (!req.user || !req.user.access_rights) {
@@ -561,83 +675,146 @@ app.get('/api/overview-stats', authenticateToken, async (req, res) => {
 
 // --- РОУТ СПИСКА (обновленный) ---
 app.get('/api/assets-with-live-data', authenticateToken, async (req, res) => {
-  if (!req.user || !req.user.access_rights || !req.user.access_rights.allowedAssets) {
-    return res.status(403).json({ message: 'Доступ запрещен: нет списка активов.' })
+  if (!req.user || !req.user.access_rights) {
+    return res.status(403).json({ message: 'Доступ запрещен: нет данных пользователя.' })
   }
 
-  const allowedAssets = req.user.access_rights.allowedAssets
+  const { allowedAssets, allowedSections } = req.user.access_rights
   const userWorkshop = req.user.wsection
 
-  // 1. Находим последние показания для ВСЕХ доступных сенсоров, связанных с этими активами
-  // (Это может быть ресурсоемко, но соответствует структуре данных)
-  const currentStates = await SensorCurrentStateModel.find({ asset: { $in: allowedAssets } })
-    .sort({ last_updated: -1 })
-    .select('asset sensor_id value last_updated')
-    .lean()
+  try {
+    const assetCount = await AssetModel.estimatedDocumentCount()
+    let assetsToProcess = []
+    let currentStates = []
+    let findCurrentStateQuery = {}
 
-  // 2. Находим все конфигурации порогов для этих активов
-  const thresholdsMap = new Map()
-  const thresholdConfigs = await ThresholdConfigModel.find({ asset: { $in: allowedAssets } }).lean()
+    // --- 1. ОПРЕДЕЛЕНИЕ ИСТОЧНИКА ДАННЫХ (AssetModel vs SensorCurrentStateModel) ---
 
-  thresholdConfigs.forEach((config) => {
-    // Ключ: "ИмяАктива|SensorID"
-    thresholdsMap.set(`${config.asset}|${config.sensorId}`, config.threshold)
-  })
+    // A. РЕЖИМ ИНИЦИАЛИЗАЦИИ (AssetModel пуста)
+    if (assetCount === 0) {
+      console.log('[ASSET FETCH] Initialization Mode: Using SensorCurrentStateModel.')
 
-  // 3. Группируем и агрегируем данные по Активам
-  const assetSummary = new Map()
+      // Фильтруем по цеху пользователя, чтобы не показывать лишние данные
+      findCurrentStateQuery = { wsection: userWorkshop }
 
-  currentStates.forEach((state) => {
-    const key = state.asset
+      // Получаем все текущие состояния, соответствующие цеху
+      currentStates = await SensorCurrentStateModel.find(findCurrentStateQuery).lean()
 
-    // Если Актив еще не в итоговой карте, инициализируем его
-    if (!assetSummary.has(key)) {
-      assetSummary.set(key, {
-        name: key,
-        workshop: userWorkshop,
-        status: 'Активен', // Начальное состояние
-        statusColor: 'text-success',
-        lastValue: 'N/A',
-        lastTimestamp: 'N/A',
-        sensorCount: 0, // Для понимания, сколько сенсоров у актива
-        activeSensors: 0, // Для расчета общего статуса
-        alarmSensors: 0,
+      // Группируем их в структуру, похожую на AssetModel
+      const groupedAssets = {}
+      currentStates.forEach((state) => {
+        const assetKey = state.asset
+        if (!groupedAssets[assetKey]) {
+          groupedAssets[assetKey] = {
+            assetName: assetKey,
+            workshop: state.wsection,
+            sensors: [],
+            responsibleEngineer: 'Система',
+            // Временные поля для соответствия map ниже
+            lastUpdateTime: state.last_updated,
+          }
+        }
+        groupedAssets[assetKey].sensors.push({
+          sensorId: state.sensor_id,
+          sensorType: state.sensor_type,
+        })
       })
+
+      assetsToProcess = Object.values(groupedAssets).map((asset) => ({
+        // Форматируем для финального ответа
+        name: asset.assetName,
+        workshop: asset.workshop,
+        sensors: asset.sensors,
+        lastUpdateTime: asset.lastUpdateTime,
+      }))
     }
 
-    const summary = assetSummary.get(key)
-    summary.sensorCount++
+    // B. СТРОГИЙ РЕЖИМ (AssetModel - основной источник)
+    else {
+      console.log('[ASSET FETCH] Strict Mode: Using AssetModel.')
 
-    const threshold = thresholdsMap.get(`${key}|${state.sensor_id}`)
-    const isAlarm = threshold && state.value > threshold
+      let findAssetQuery = {}
 
-    if (isAlarm) {
-      summary.alarmSensors++
+      if (allowedAssets && allowedAssets.length > 0) {
+        findAssetQuery = { assetName: { $in: allowedAssets } }
+      } else if (req.user.profession !== 'scientist' && userWorkshop) {
+        // Если инженер/админ, но токен пуст, показываем его цех (пока токен не обновится)
+        findAssetQuery = { workshop: userWorkshop }
+      } else {
+        return res.status(200).json([]) // Нет прав или нет цеха
+      }
+
+      assetsToProcess = await AssetModel.find(findAssetQuery).lean()
+
+      if (assetsToProcess.length === 0) {
+        return res.status(200).json([])
+      }
+
+      // Получаем все текущие состояния для сенсоров, привязанных к найденным активам
+      const allSensorIds = assetsToProcess.flatMap((asset) => asset.sensors.map((s) => s.sensorId)).filter((id) => id)
+
+      // Если мы в строгом режиме, нам нужно получить данные сенсоров, которые сейчас в БД
+      currentStates = await SensorCurrentStateModel.find({ sensor_id: { $in: allSensorIds } }).lean()
     }
 
-    // Обновляем сводные данные (берем самые свежие, хотя они уже отсортированы)
-    summary.lastValue = state.value.toFixed(2)
-    summary.lastTimestamp = new Date(state.last_updated).toLocaleTimeString()
-  })
-
-  // 4. Финальная обработка статуса
-  const results = Array.from(assetSummary.values()).map((summary) => {
-    if (summary.alarmSensors > 0) {
-      summary.status = 'Тревога'
-      summary.statusColor = 'text-danger'
-    } else if (summary.sensorCount === 0) {
-      summary.status = 'Нет данных'
-      summary.statusColor = 'text-secondary'
-    } else {
-      summary.status = 'Активен'
-      summary.statusColor = 'text-success'
+    // Если после всех проверок нет активов для обработки
+    if (assetsToProcess.length === 0) {
+      return res.status(200).json([])
     }
 
-    // В сводке мы покажем последнее показание, которое мы нашли
-    return summary
-  })
+    // --- 2. ОБЩАЯ ЛОГИКА ОБОГАЩЕНИЯ ---
 
-  res.status(200).json(results)
+    const stateMap = new Map(currentStates.map((r) => [r.sensor_id, r])) // <-- ИСПРАВЛЕННЫЙ СИНТАКСИС!
+
+    const thresholdsByTypeMap = new Map()
+    const thresholdsDb = await ThresholdByTypeModel.find({}).lean()
+    thresholdsDb.forEach((t) => thresholdsByTypeMap.set(t.sensor_type, t))
+
+    const results = assetsToProcess.map((asset) => {
+      let alarmSensors = 0
+      let lastValue = 'N/A'
+      let lastTimestamp = 'N/A'
+
+      // Пересчет статуса и поиск последнего показания
+      asset.sensors.forEach((sensor) => {
+        const state = stateMap.get(sensor.sensorId)
+
+        // Проверка на undefined state и undefined state.value
+        if (state && state.value !== undefined) {
+          const threshold = thresholdsByTypeMap.get(sensor.sensorType)
+
+          // Расчет тревоги
+          if (threshold && state.value > threshold.max_value) {
+            alarmSensors++
+          }
+
+          // Определение самого свежего показания
+          if (new Date(state.last_updated) > new Date(lastTimestamp) || lastTimestamp === 'N/A') {
+            lastValue = state.value ? state.value.toFixed(2) : 'N/A'
+            lastTimestamp = moment(state.last_updated).format('HH:mm:ss')
+          }
+        }
+      })
+
+      const status = alarmSensors > 0 ? 'Тревога' : 'Активен'
+      const statusColor = alarmSensors > 0 ? 'text-danger' : 'text-success'
+
+      return {
+        name: asset.assetName || asset.name, // Используем assetName или временное name
+        workshop: asset.workshop,
+        status: status,
+        statusColor: statusColor,
+        lastValue: lastValue,
+        lastTimestamp: lastTimestamp,
+        sensors: asset.sensors, // Возвращаем сенсоры для Генератора Отчетов
+      }
+    })
+
+    res.status(200).json(results)
+  } catch (error) {
+    console.error('CRITICAL ERROR in assets-with-live-data:', error)
+    res.status(500).json({ message: 'Критическая ошибка сервера при загрузке реестра.' })
+  }
 })
 
 app.get('/api/assets/:assetName', authenticateToken, async (req, res) => {
@@ -650,26 +827,61 @@ app.get('/api/assets/:assetName', authenticateToken, async (req, res) => {
 
   try {
     // 1. Находим пороги для этого актива
-    const thresholdConfigs = await ThresholdConfigModel.find({ asset: assetName }).lean()
-    const thresholdsMap = new Map(thresholdConfigs.map((c) => [c.sensorId, c.threshold]))
+    const allThresholdConfigs = await ThresholdByTypeModel.find({}).lean()
+
+    const thresholdsMap = new Map(
+      allThresholdConfigs.map((c) => [c.sensor_type, { min: c.min_value, max: c.max_value }]),
+    )
 
     // 2. Находим показания для всех сенсоров этого актива
     const currentStates = await SensorCurrentStateModel.find({ asset: assetName }).sort({ last_updated: -1 }).lean()
 
     // 3. Агрегируем и обогащаем данные
     const sensorDetailsPromises = currentStates.map(async (state) => {
-      const threshold = thresholdsMap.get(state.sensor_id)
-      const status = threshold && state.value > threshold ? 'Тревога' : 'ОК'
-      const statusColor = status === 'Тревога' ? 'text-danger' : 'text-success'
+      const sensorType = state.sensor_type
+      const currentThresholds = thresholdsMap.get(sensorType) || {}
+
+      const currentValue = parseFloat(state.value)
+      const minValue = parseFloat(currentThresholds.min)
+      const maxValue = parseFloat(currentThresholds.max)
+      console.log(`[${sensorType}] Value: ${currentValue}, Min: ${minValue}, Max: ${maxValue}`)
+      console.log(`Is Alarm: ${currentValue < minValue || currentValue > maxValue}`)
+
+      let status = 'ОК'
+      let statusText = 'ОК'
+
+      if (isNaN(currentValue) || isNaN(minValue) || isNaN(maxValue)) {
+        status = 'Error'
+        statusText = 'Ошибка данных'
+      } else if (currentValue < minValue || currentValue > maxValue) {
+        status = 'Alarm'
+        statusText = 'Тревога'
+      }
+
+      let statusColor
+      let badgeBg
+      if (status === 'Alarm') {
+        statusColor = 'text-danger'
+        badgeBg = 'bg-danger'
+      } else if (status === 'Error') {
+        statusColor = 'text-warning' // Желтый цвет для ошибки данных
+        badgeBg = 'bg-warning'
+      } else {
+        statusColor = 'text-success'
+        badgeBg = 'bg-success'
+      }
 
       return {
         type: state.sensor_type, // Берем тип из показаний
         sensorId: state.sensor_id,
-        threshold: threshold || 'N/A',
-        currentValue: state.historicalvalue ? state.historicalvalue.toFixed(2) : 'Нет данных',
-        timestamp: new Date(state.last_updated).toLocaleTimeString(),
-        status: status,
+        min_value: currentThresholds.min,
+        max_value: currentThresholds.max,
+        unit: state.unit,
+        currentValue: state.value ? state.value.toFixed(2) : 'Нет данных',
+        timestamp: moment(state.last_updated).format('YYYY-MM-DD HH:mm:ss'),
+        status: statusText,
         statusColor: statusColor,
+        badgeBg: badgeBg,
       }
     })
 
@@ -682,12 +894,9 @@ app.get('/api/assets/:assetName', authenticateToken, async (req, res) => {
     const responseData = {
       name: assetName,
       workshop: wsection,
-      responsibleEngineer: nameU,
+      responsibleWorker: nameU,
       status: overallStatus,
       statusColor: overallStatusColor,
-      // Берем самое последнее показание для сводки
-      lastValue: sensorDetails[0]?.currentValue || 'N/A',
-      lastTimestamp: sensorDetails[0]?.timestamp || 'N/A',
       sensors: sensorDetails,
     }
 
@@ -986,7 +1195,7 @@ app.get('/api/thresholds-by-type', authenticateToken, async (req, res) => {
 })
 
 app.put('/api/config/thresholds-save', authenticateToken, async (req, res) => {
-  if (req.user.profession !== 'engineer' && req.user.profession !== 'admin') {
+  if (req.user.profession !== 'engineer' && req.user.profession !== 'admin' && req.user.profession !== 'scientist') {
     return res.status(403).json({ message: 'Доступ запрещен. Только инженеры могут менять настройки.' })
   }
 
@@ -1080,7 +1289,7 @@ app.put('/api/alerts/:id/read', authenticateToken, async (req, res) => {
 })
 
 app.put('/api/alerts/:id/resolve', authenticateToken, async (req, res) => {
-  const resolvedBy = req.user.nameU || 'Инженер'
+  const resolvedBy = req.user.nameU || 'администратор'
 
   try {
     const alert = await SensorAlertModel.findByIdAndUpdate(
@@ -1097,6 +1306,276 @@ app.put('/api/alerts/:id/resolve', authenticateToken, async (req, res) => {
     res.status(200).json({ message: 'Уведомление помечено как решенное.', alert })
   } catch (error) {
     res.status(500).json({ message: 'Ошибка сервера.' })
+  }
+})
+
+app.get('/api/alerts/all', authenticateToken, async (req, res) => {
+  if (!req.user || !req.user.access_rights) {
+    return res.status(403).json({ message: 'Доступ запрещен.' })
+  }
+
+  const { allowedAssets, allowedSections } = req.user.access_rights
+  const profession = req.user.profession
+
+  let findQuery = {}
+
+  // Строим запрос на основе прав пользователя
+  if (profession === 'engineer' || profession === 'scientist') {
+    if (allowedSections && allowedSections.length > 0) {
+      findQuery = { wsection: { $in: allowedSections } }
+    } else {
+      // Если прав нет или неизвестная роль, возвращаем пусто
+      return res.status(200).json([])
+    }
+  }
+
+  try {
+    // Получаем все уведомления, сортируем по дате (новые сверху)
+    const allAlerts = await SensorAlertModel.find(findQuery).sort({ createdAt: -1 }).lean()
+
+    // форматирование даты в 'ru' локаль
+    const alertsWithFormattedDate = allAlerts.map((alert) => ({
+      ...alert,
+      // Форматирование даты
+      date_display: moment(alert.createdAt).locale('ru').format('D MMMM YYYY, HH:mm'),
+    }))
+
+    res.status(200).json(alertsWithFormattedDate)
+  } catch (error) {
+    console.error('Error fetching all alerts:', error)
+    res.status(500).json({ message: 'Ошибка сервера при получении списка уведомлений.' })
+  }
+})
+
+// Роут для генерации и скачивания отчетов в формате CSV
+app.get('/api/reports/generate', authenticateToken, async (req, res) => {
+  // ... (Проверки прав и параметров) ...
+
+  const { reportType, asset, sensorId, startDate, endDate, format: requestedFormat } = req.query
+  const format = requestedFormat || 'CSV'
+
+  if (!reportType || !asset || !sensorId || !startDate || !endDate) {
+    return res.status(400).json({ message: 'Необходимо указать тип отчета, актив, сенсор, даты и формат.' })
+  }
+
+  const start = moment(startDate).startOf('day').toDate()
+  const end = moment(endDate).endOf('day').toDate()
+
+  try {
+    let reportData = []
+    let fields = []
+
+    // --- 1. ПОЛУЧЕНИЕ И ФОРМАТИРОВАНИЕ ДАННЫХ ---
+    if (reportType === 'SENSOR_HISTORY') {
+      // ... (Логика получения данных) ...
+      reportData = await SensorDataHistory.find({
+        asset: asset,
+        sensor_id: sensorId,
+        timestamp: { $gte: start, $lte: end },
+      })
+        .sort({ timestamp: 1 })
+        .lean()
+
+      if (reportData.length === 0) {
+        return res.status(404).json({ message: 'Данные для отчета не найдены.' })
+      }
+
+      const formattedData = reportData.map((item) => ({
+        Время: moment(item.timestamp).format('YYYY-MM-DD HH:mm:ss'),
+        Актив: item.asset,
+        'Сенсор ID': item.sensor_id,
+        'Тип сенсора': item.sensor_type,
+        Значение: item.historicalvalue !== null && item.historicalvalue !== undefined ? item.historicalvalue : '',
+        Единица: item.unit !== null && item.unit !== undefined ? item.unit : '',
+        Цех: item.wsection,
+      }))
+
+      fields = ['Время', 'Актив', 'Сенсор ID', 'Тип сенсора', 'Значение', 'Единица', 'Цех']
+      reportData = formattedData
+    }
+
+    // Объявление tableHeaders на высоком уровне
+    const tableHeaders = fields
+
+    // --- 2. ФОРМАТИРОВАНИЕ И ОТПРАВКА ОТЧЕТА ---
+
+    let buffer
+    let fileName = `Report_${asset}_${sensorId}_${moment(startDate).format('YYYYMMDD')}_to_${moment(endDate).format(
+      'YYYYMMDD',
+    )}`
+
+    if (format === 'CSV') {
+      // ... (Логика CSV) ...
+    } else if (format === 'XLSX') {
+      // ... (Логика XLSX) ...
+    } else if (format === 'PDF') {
+      fileName += '.pdf'
+      const doc = new PDFDocument({ margin: 30, size: 'A4' })
+
+      // --- КОНФИГУРАЦИЯ КИРИЛЛИЧЕСКОГО ШРИФТА ---
+      const CYRILLIC_FONT_PATH = path.join(__dirname, 'fonts', 'arialmt.ttf')
+
+      try {
+        doc.font(CYRILLIC_FONT_PATH)
+      } catch (e) {
+        console.error('ERROR: Missing Cyrillic font file at:', CYRILLIC_FONT_PATH, e.message)
+      }
+      // ------------------------------------------
+
+      return new Promise((resolve, reject) => {
+        const buffers = []
+        doc.on('data', buffers.push.bind(buffers))
+        doc.on('error', reject)
+
+        doc.on('end', () => {
+          // ... (Установка заголовков и отправка PDF) ...
+          const pdfBuffer = Buffer.concat(buffers)
+          const unencodedFileName = fileName
+          const encodedFileName = encodeURIComponent(unencodedFileName)
+          const safeAsciiFileName = unencodedFileName.replace(/[^\w\s\.\-]/g, '_')
+
+          res.header('Content-Type', 'application/pdf')
+          res.header(
+            'Content-Disposition',
+            `attachment; filename="${safeAsciiFileName}"; filename*=UTF-8''${encodedFileName}`,
+          )
+          res.status(200).send(pdfBuffer)
+          resolve()
+        })
+
+        // --- КОНТЕНТ PDF ---
+
+        doc.fontSize(14).text(`Отчет по активу: ${asset}`, { underline: true })
+        doc.fontSize(10).moveDown(0.5)
+        doc.text(`Сенсор: ${sensorId}`)
+        doc.text(`Период: ${startDate} по ${endDate}`).moveDown(1)
+
+        // --- ПАРАМЕТРЫ ТАБЛИЦЫ ---
+        const COLUMN_WIDTHS = [100, 80, 70, 90, 60, 40, 70] // Ширины столбцов
+        const TABLE_START_X = 30
+        let currentX = TABLE_START_X
+
+        const columnXPositions = COLUMN_WIDTHS.map((width) => {
+          const x = currentX
+          currentX += width
+          return x
+        })
+        // -------------------------
+
+        doc.fontSize(8)
+
+        // Вывод заголовков
+        let startY = doc.y
+        tableHeaders.forEach((header, i) => {
+          const x = columnXPositions[i]
+          doc.text(header, x, startY, { width: COLUMN_WIDTHS[i], align: 'left' })
+        })
+        doc.moveDown(0.5) // Сдвигаем курсор после заголовков
+
+        // Вывод данных
+        reportData.forEach((row) => {
+          let y = doc.y // Получаем текущую Y-позицию
+
+          // Переход на новую страницу
+          if (y > 750) {
+            doc.addPage()
+            startY = 30
+            y = startY
+            doc.fontSize(8)
+
+            // Повторяем заголовки на новой странице
+            tableHeaders.forEach((header, i) => {
+              const x = columnXPositions[i]
+              doc.text(header, x, startY, { width: COLUMN_WIDTHS[i], align: 'left' })
+            })
+            doc.moveDown(0.5)
+            y = doc.y // Обновляем Y после повтора заголовков
+          }
+
+          // Вывод текущей строки
+          tableHeaders.forEach((header, colIndex) => {
+            const x = columnXPositions[colIndex]
+            const width = COLUMN_WIDTHS[colIndex]
+            const value = String(row[header])
+
+            // Печатаем значение
+            doc.text(value, x, y, { width: width, align: 'left', continued: false })
+          })
+
+          // Сдвигаем курсор на новую строку для следующей итерации
+          doc.moveDown(0.8)
+        })
+
+        doc.end()
+      })
+      return
+    } else {
+      return res.status(400).json({ message: 'Неподдерживаемый формат отчета.' })
+    }
+
+    // ... (Синхронная отправка CSV/XLSX) ...
+  } catch (error) {
+    console.error('CRITICAL ERROR generating report:', error)
+    res.status(500).json({ message: 'Ошибка сервера при генерации отчета.' })
+  }
+})
+
+async function initializeNewAssetSensors(newAsset) {
+  const assetName = newAsset.assetName
+  const workshop = newAsset.workshop
+  const timestamp = new Date()
+
+  const initialRecords = newAsset.sensors.map((s) => {
+    let unit = 'N/A'
+
+    if (s.sensorType === 'Температура') unit = 'градусов Цельсия'
+    else if (s.sensorType === 'Вибрация') unit = 'мм/с'
+    else if (s.sensorType === 'Давление') unit = 'бар'
+
+    return {
+      sensor_id: s.sensorId,
+      timestamp: timestamp,
+      last_updated: timestamp,
+      sensor_type: s.sensorType,
+      role: user.profession,
+      wsection: workshop,
+      asset: assetName,
+      value: 20, // Начальное тестовое значение
+      unit: unit,
+    }
+  })
+
+  if (initialRecords.length > 0) {
+    // 1. Вставляем в текущее состояние
+    await SensorCurrentStateModel.insertMany(initialRecords)
+    // 2. Вставляем в историю (для графиков и отчетов)
+    await SensorDataHistory.insertMany(initialRecords)
+    console.log(`[INIT] Initialized ${initialRecords.length} sensors for new asset: ${assetName}`)
+  }
+}
+
+app.get('/api/workshops', authenticateToken, async (req, res) => {
+  try {
+    const assetCount = await AssetModel.estimatedDocumentCount()
+    let uniqueWorkshops
+
+    if (assetCount > 0) {
+      // Если есть созданные активы, используем их (основной источник)
+      uniqueWorkshops = await AssetModel.distinct('workshop')
+    } else {
+      // Если AssetModel пуста, берем цеха из текущих данных (для инициализации)
+      uniqueWorkshops = await SensorCurrentStateModel.distinct('wsection')
+      console.log(`[WORKSHOPS INIT] Using SensorCurrentStateModel for workshops: ${uniqueWorkshops.join(', ')}`)
+    }
+
+    // Фильтруем цеха по правам доступа пользователя (если у него есть allowedSections)
+    const allowed = req.user.access_rights.allowedSections || []
+    const filteredWorkshops = uniqueWorkshops.filter((w) => allowed.includes(w))
+
+    res.status(200).json({ workshops: filteredWorkshops })
+  } catch (error) {
+    console.error('Error fetching workshops:', error)
+    res.status(500).json({ workshops: [] })
   }
 })
 

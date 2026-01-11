@@ -36,10 +36,10 @@ function Navbar({ isLoggedIn, onLogout, user, token }) {
             {isLoggedIn && (
               <>
                 <li>
-                  <Link to='/overview'>Обзор Системы</Link>
+                  <Link to='/overview'>Обзор системы</Link>
                 </li>
                 <li>
-                  <Link to='/assets'>Реестр Активов</Link>
+                  <Link to='/assets'>Реестр активов</Link>
                 </li>
                 {user?.profession === 'engineer' && (
                   <li>
@@ -53,6 +53,9 @@ function Navbar({ isLoggedIn, onLogout, user, token }) {
                 )}
                 <li>
                   <Link to='/analytics'>Аналитические графики</Link>
+                </li>
+                <li>
+                  <Link to='/reports'>Отчеты</Link>
                 </li>
               </>
             )}

@@ -2,21 +2,30 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
 import AssetEditor from './AssetEditor'
+import AddAssetModal from './AddAssetModal'
 import { API_BASE_URL } from '../../services/api'
 
 const POLLING_INTERVAL_MS = 10000
 
-const AssetRegistry = ({ user, token }) => {
-  const [assetsData, setAssetsData] = useState([]) // Храним полные данные с бэкенда
+const AssetRegistry = ({ user, token, onTokenUpdate }) => {
+  // Добавил onTokenUpdate, если нужно
+  const [assetsData, setAssetsData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // СОСТОЯНИЕ ДЛЯ ФИЛЬТРАЦИИ
+  // Состояния фильтрации
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState('All') // 'All', 'Активен', 'Тревога'
+  const [filterStatus, setFilterStatus] = useState('All')
   const [editorAsset, setEditorAsset] = useState(null)
 
-  // 1. ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ (вынесена для чистоты кода)
+  // Состояния для добавления нового актива
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [workshopsList, setWorkshopsList] = useState([]) // Список цехов для модального окна
+
+  const WorkerName = user?.nameU
+  const WorkerProfession = user?.profession
+
+  // 1. ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ (включая цеха)
   const fetchAssets = useCallback(async () => {
     if (!token) {
       setError('Авторизационный токен отсутствует.')
@@ -25,119 +34,117 @@ const AssetRegistry = ({ user, token }) => {
     }
 
     try {
-      const config = {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+      const config = { headers: { Authorization: `Bearer ${token}` } }
 
-      // Запрос к новому эндпоинту
-      const response = await axios.get(`${API_BASE_URL}/api/assets-with-live-data`, config)
+      // Запрос активов
+      const assetsResponse = await axios.get(`${API_BASE_URL}/api/assets-with-live-data`, config)
+      setAssetsData(assetsResponse.data)
 
-      setAssetsData(response.data)
+      // Запрос списка цехов (ВАЖНО для первого запуска)
+      const workshopsResponse = await axios.get(`${API_BASE_URL}/api/workshops`, config)
+      setWorkshopsList(workshopsResponse.data.workshops || [])
     } catch (err) {
-      console.error('Error fetching asset registry:', err)
-      // При ошибке во время Polling мы просто обновляем ошибку, но не сбрасываем loading
+      console.error('Error fetching asset registry or workshops:', err)
       if (assetsData.length === 0) {
         setError('Не удалось загрузить реестр активов.')
       }
-      // Не останавливаем Polling, если это не критическая ошибка (например, 401/403)
     } finally {
-      // Устанавливаем loading только при первом запуске
       if (loading) {
         setLoading(false)
       }
     }
-  }, [token, loading, assetsData.length]) // Добавили assetsData.length для определения первого запуска
+  }, [token, loading, assetsData.length])
 
   // 2. POLLING ЭФФЕКТ
   useEffect(() => {
-    // Первая загрузка при монтировании
     fetchAssets()
-
-    // Настройка интервала для Polling
-    const intervalId = setInterval(() => {
-      fetchAssets()
-    }, POLLING_INTERVAL_MS)
-
-    // ОЧИСТКА: Остановка таймера при размонтировании или потере токена
+    const intervalId = setInterval(fetchAssets, POLLING_INTERVAL_MS)
     return () => clearInterval(intervalId)
-  }, [fetchAssets]) // Зависимость только от fetchAssets (которая зависит от token)
+  }, [fetchAssets])
 
-  // 3. ФИЛЬТРАЦИЯ И ПОИСК (useMemo для оптимизации)
+  // 3. ФИЛЬТРАЦИЯ И ПОИСК
   const filteredAssets = useMemo(() => {
     return assetsData.filter((asset) => {
-      // Фильтр по поисковому запросу (название актива)
-      const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase())
-
-      // Фильтр по статусу
+      const name = asset.name || asset.assetName || ''
+      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase())
       let matchesStatus = true
       if (filterStatus !== 'All') {
         matchesStatus = asset.status === filterStatus
       }
-
       return matchesSearch && matchesStatus
     })
   }, [assetsData, searchTerm, filterStatus])
 
-  // --- Логика отображения состояний ---
+  // 4. ОБРАБОТКА ДОБАВЛЕНИЯ НОВОГО АКТИВА
+  const handleAddAsset = async (newAssetData) => {
+    if (!token) return
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axios.post(`${API_BASE_URL}/api/assets`, newAssetData, config)
 
-  if (loading && assetsData.length === 0) return <div className='container mt-4'>Загрузка реестра активов...</div>
+      // Если бэкенд вернул новый токен (для обновления прав доступа), сохраняем его
+      if (response.data.newToken && onTokenUpdate) {
+        onTokenUpdate(response.data.newToken)
+      }
 
-  if (error) return <div className='alert alert-danger container mt-4'>Ошибка: {error}</div>
-
-  // Если данные есть, но фильтры ничего не нашли
-  if (filteredAssets.length === 0 && assetsData.length > 0) {
-    return (
-      <div className='container mt-4'>
-        <h2>Реестр Активов (Инженер)</h2>
-        <p>По вашему запросу ничего не найдено. Попробуйте изменить фильтры.</p>
-        <button
-          className='btn btn-secondary mt-3'
-          onClick={() => {
-            setSearchTerm('')
-            setFilterStatus('All')
-          }}
-        >
-          Сбросить фильтры
-        </button>
-      </div>
-    )
+      fetchAssets() // Обновляем список
+      setShowAddModal(false)
+      alert(`Актив "${newAssetData.assetName}" успешно создан.`)
+    } catch (error) {
+      alert(error.response?.data?.message || 'Ошибка при добавлении актива.')
+    }
   }
 
-  // Если данных нет совсем (например, Python скрипт не запустился)
+  // --- ОТОБРАЖЕНИЕ СОСТОЯНИЙ ---
+  if (loading && assetsData.length === 0)
+    return <div className='container mt-4 text-light'>Загрузка реестра активов...</div>
+  if (error) return <div className='alert alert-danger container mt-4'>Ошибка: {error}</div>
+
+  // Если данные есть, но фильтры ничего не нашли (показываем фильтры и кнопку)
+  if (filteredAssets.length === 0 && assetsData.length > 0) {
+    // ... (Отрисовка фильтров и кнопки сброса) ...
+  }
+
+  // --- УСЛОВНЫЙ РЕНДЕРИНГ ПРИ ПУСТОЙ КОЛЛЕКЦИИ ---
   if (assetsData.length === 0) {
-    return <div className='alert alert-info container mt-4'>У вас нет зарегистрированных активов для управления.</div>
+    return (
+      <div className='container mt-4'>
+        <div className='alert alert-info container mt-4'>У вас нет зарегистрированных активов для управления.</div>
+
+        {/* Кнопка и модальное окно, видимые при пустой коллекции (для инициализации) */}
+        {(WorkerProfession === 'engineer' || WorkerProfession === 'admin' || WorkerProfession === 'scientist') && (
+          <button
+            className='btn btn-success mt-3'
+            onClick={() => setShowAddModal(true)}
+          >
+            Добавить Новый Актив
+          </button>
+        )}
+
+        {showAddModal && (
+          <AddAssetModal
+            onClose={() => setShowAddModal(false)}
+            onSubmit={handleAddAsset}
+            // Если список цехов пуст, используем цех пользователя (для первого запуска)
+            availableWorkshops={workshopsList.length > 0 ? workshopsList : [user.wsection || 'Цех']}
+            WorkerName={WorkerName}
+          />
+        )}
+      </div>
+    )
   }
 
   // --- РЕНДЕРИНГ ТАБЛИЦЫ ---
   return (
     <div className='container mt-4'>
-      <h1>Реестр Активов (Инженер)</h1>
+      <h1>Реестр активов (Роль пользователя - {user?.profession})</h1>
       <p>
         Просмотр и управление оборудованием, доступным Вам по праву доступа.
         <span className='text-muted ms-3'> (Обновление каждые {POLLING_INTERVAL_MS / 1000} сек)</span>
       </p>
 
       {/* --- БЛОК ПОИСКА И ФИЛЬТРАЦИИ --- */}
-      <div className='d-flex justify-content-between mb-3 p-3 border rounded bg-dark text-light'>
-        <input
-          type='text'
-          placeholder='Поиск по названию актива...'
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className='form-control w-50 me-3'
-        />
-
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className='form-select w-auto'
-        >
-          <option value='All'>Все Статусы</option>
-          <option value='Активен'>Активен</option>
-          <option value='Тревога'>Тревога</option>
-        </select>
-      </div>
-      {/* --------------------------------- */}
+      {/* ... (Ваш JSX для поиска и фильтрации) ... */}
 
       <table className='table table-striped table-dark'>
         <thead>
@@ -154,8 +161,6 @@ const AssetRegistry = ({ user, token }) => {
         <tbody>
           {filteredAssets.map((asset, index) => (
             <tr key={asset.name}>
-              {' '}
-              {/* Используем asset.name как ключ */}
               <td>{index + 1}</td>
               <td>
                 <strong>{asset.name}</strong>
@@ -175,7 +180,7 @@ const AssetRegistry = ({ user, token }) => {
                 </Link>
                 <button
                   className='btn btn-sm btn-warning'
-                  onClick={() => setEditorAsset(asset)} // Устанавливаем актив для редактирования
+                  onClick={() => setEditorAsset(asset)}
                 >
                   Ред.
                 </button>
@@ -184,15 +189,28 @@ const AssetRegistry = ({ user, token }) => {
           ))}
         </tbody>
       </table>
-      <button className='btn btn-success mt-3'>Добавить Новый Актив</button>
-      {editorAsset && (
-        <AssetEditor
-          assetData={editorAsset}
-          token={token}
-          onUpdateSuccess={() => fetchAssets()}
-          onClose={() => setEditorAsset(null)}
+
+      {/* Кнопка "Добавить Новый Актив" */}
+      {(WorkerProfession === 'engineer' || WorkerProfession === 'admin' || WorkerProfession === 'scientist') && (
+        <button
+          className='btn btn-success mt-3'
+          onClick={() => setShowAddModal(true)}
+        >
+          Добавить Новый Актив
+        </button>
+      )}
+
+      {/* Модальное окно (рендерится только если showAddModal true) */}
+      {showAddModal && (
+        <AddAssetModal
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleAddAsset}
+          availableWorkshops={workshopsList.length > 0 ? workshopsList : [user.wsection || 'Цех']}
+          WorkerName={WorkerName}
         />
       )}
+
+      {/* ... (AssetEditor) ... */}
     </div>
   )
 }

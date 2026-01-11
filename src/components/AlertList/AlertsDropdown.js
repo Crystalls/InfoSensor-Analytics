@@ -3,6 +3,7 @@ import axios from 'axios'
 import { API_BASE_URL } from '../../services/api'
 import moment from 'moment'
 import { toast, ToastContainer } from 'react-toastify'
+require('moment/locale/ru')
 
 const AlertsDropdown = ({ token }) => {
   const [alerts, setAlerts] = useState([])
@@ -179,7 +180,7 @@ const AlertsDropdown = ({ token }) => {
                     className='text-muted ms-2'
                     style={{ whiteSpace: 'nowrap', fontSize: '0.75rem' }}
                   >
-                    {moment(alert.timestamp).fromNow()}
+                    {moment(alert.timestamp).locale('ru').fromNow()}
                   </small>
                 </div>
 
@@ -215,7 +216,7 @@ const AlertsDropdown = ({ token }) => {
           style={{ backgroundColor: '#444' }}
         ></div>
         <a
-          href='/alerts'
+          href='/notifications'
           className='dropdown-item text-center text-info'
           style={{ backgroundColor: 'transparent', padding: '10px 15px' }}
         >

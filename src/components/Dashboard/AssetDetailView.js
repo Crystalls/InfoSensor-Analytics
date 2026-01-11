@@ -122,7 +122,7 @@ const AssetDetailView = ({ token }) => {
 
       <div className='card mb-4'>
         <div className='card-header bg-primary text-white'>
-          <h4>Общая Информация</h4>
+          <h4>Общая информация</h4>
         </div>
         <div className='card-body'>
           <p>
@@ -132,18 +132,15 @@ const AssetDetailView = ({ token }) => {
             <strong>Статус:</strong> <span className={details.statusColor}>{details.status}</span>
           </p>
           <p>
-            <strong>Ответственный инженер:</strong> {details.responsibleEngineer || 'Не назначен'}
+            <strong>Ответственный рабочий:</strong> {details.responsibleWorker || 'Не назначен'}
           </p>
           <hr />
-          <p>
-            <strong>Текущее Состояние:</strong> {details.lastValue} ({details.timestamp})
-          </p>
         </div>
       </div>
 
       <div className='card mb-4'>
         <div className='card-header bg-info text-dark'>
-          <h4>Привязанные Сенсоры</h4>
+          <h4>Привязанные датчики</h4>
         </div>
         <ul className='list-group list-group-flush'>
           {details.sensors &&
@@ -152,10 +149,30 @@ const AssetDetailView = ({ token }) => {
                 key={index}
                 className='list-group-item d-flex justify-content-between align-items-center'
               >
-                {sensor.type} (ID: {sensor.sensorId}){/* 3. ОТОБРАЖАЕМ НОВЫЕ ПОРОГИ (MIN - MAX) */}
-                <span className={`badge bg-secondary rounded-pill`}>
-                  Порог: {sensor.min_value} - {sensor.max_value}
-                </span>
+                {/* ЛЕВАЯ ЧАСТЬ: Тип и ID */}
+                <div>
+                  <strong>{sensor.type}</strong> (ID: {sensor.sensorId}){/* ВЫВОД АКТУАЛЬНЫХ ДАННЫХ */}
+                  <div
+                    className='text-unmuted'
+                    style={{ fontSize: '0.9em' }}
+                  >
+                    Значение: <span className={sensor.statusColor}>{sensor.currentValue}</span>
+                    {sensor.unit && <span> {sensor.unit}</span>}
+                    {sensor.timestamp && <span> | Обновлено: {sensor.timestamp}</span>}
+                  </div>
+                </div>
+
+                {/* ПРАВАЯ ЧАСТЬ: Пороги и Статус */}
+                <div className='text-end'>
+                  <span className='d-block mb-1'>
+                    <span className={`badge bg-secondary rounded-pill`}>
+                      Порог: {sensor.min_value} - {sensor.max_value}
+                    </span>
+                  </span>
+                  <span className={`badge ${sensor.status === 'Тревога' ? 'bg-danger' : 'bg-success'} rounded-pill`}>
+                    {sensor.status}
+                  </span>
+                </div>
               </li>
             ))}
         </ul>

@@ -1,24 +1,16 @@
 import React, { useEffect, useState } from 'react'
-import SensorDataDisplay from '../SensorList/SensorDataDisplay'
+import SensorDataDisplay from '../SensorList/SensorDataDisplayScientist.js'
 import { API_BASE_URL } from '../../services/api.js' // Assuming you have an API base URL
+import SensorDataDisplayScientist from '../SensorList/SensorDataDisplayScientist.js'
 
-function DashboardScientist() {
-  const [nameU, setUsername] = useState(null)
-
-  useEffect(() => {
-    //Получение имени пользователя из БД, после входа
-    const storedName = localStorage.getItem('nameU')
-
-    if (storedName) {
-      setUsername(storedName)
-    }
-  }, [])
-
+function DashboardScientist({ user }) {
   return (
-    <div>
-      <h2>Scientist Dashboard</h2>
-      <p>Welcome, {nameU || 'User'}! Here you can see your agricultural sensor data.</p>
-      <SensorDataDisplay />
+    <div className='MenuEng'>
+      <h2>Меню ученого</h2>
+      <p className='leads'>
+        Добро пожаловать, {user?.nameU}! Здесь вы можете увидеть показания датчиков вашего рабочего сектора.
+      </p>
+      <SensorDataDisplayScientist />
     </div>
   )
 }

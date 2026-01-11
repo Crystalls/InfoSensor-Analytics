@@ -60,7 +60,7 @@ const AnalyticsDashboard = ({ user, token }) => {
         setSelectedAsset(initialAsset)
         const sensorsForInitialAsset = map[initialAsset]
         if (sensorsForInitialAsset && sensorsForInitialAsset.length > 0) {
-          // Устанавливаем первый сенсор в качестве выбранного
+          // Устанавливаем первый датчик в качестве выбранного
           const initialSensorId = selectedSensor || sensorsForInitialAsset[0].id
           setSelectedSensor(initialSensorId)
         }
@@ -162,15 +162,15 @@ const AnalyticsDashboard = ({ user, token }) => {
     }
   }, [selectedAsset, token, fetchCurrentState])
 
-  // ЭФФЕКТ 3: Запуск графика при первом выборе сенсора И по триггеру
+  // ЭФФЕКТ 3: Запуск графика при первом выборе датчика и по триггеру
   useEffect(() => {
-    // Запускаем, только если триггер активен И все фильтры установлены
+    // Запускаем, только если триггер активен и все фильтры установлены
     if (chartUpdateTrigger > 0 && selectedAsset && selectedSensor) {
       fetchChartData()
     }
   }, [chartUpdateTrigger, fetchChartData])
 
-  // НОВЫЙ ЭФФЕКТ: Запуск триггера при первой загрузке
+  // Запуск триггера при первой загрузке
   useEffect(() => {
     // Если selectedSensor только что появился и триггер еще не был запущен
     if (selectedSensor && chartUpdateTrigger === 0) {
@@ -235,14 +235,14 @@ const AnalyticsDashboard = ({ user, token }) => {
         </h5>
         <ResponsiveContainer
           width='100%'
-          height='80%'
+          height='90%'
         >
           <RadialBarChart
             cx='50%'
             cy='55%'
-            innerRadius='50%'
+            innerRadius='80%'
             outerRadius='90%'
-            barSize={15}
+            barSize={20}
             data={gaugeData}
             startAngle={90}
             endAngle={-270}
@@ -260,15 +260,15 @@ const AnalyticsDashboard = ({ user, token }) => {
               textAnchor='middle'
               dominantBaseline='middle'
               className='text-light'
-              style={{ fontSize: '1.5rem', fontWeight: 'bold' }}
+              style={{ fontSize: '1.5rem', fontWeight: 'bold', fill: '#fff' }}
             >
               {value.toFixed(2)}
             </text>
           </RadialBarChart>
         </ResponsiveContainer>
         <p
-          className='text-center text-muted'
-          style={{ fontSize: '0.8rem', margin: '0' }}
+          className='text-center'
+          style={{ fontSize: '1.0rem', margin: '2%' }}
         >
           Норма: {minThreshold.toFixed(1)} - {maxThreshold.toFixed(1)}
         </p>
@@ -284,7 +284,7 @@ const AnalyticsDashboard = ({ user, token }) => {
         className='lead text-muted'
         style={{ color: '#ff6666' }}
       >
-        Анализ исторических данных. Приветствуем, {user?.nameU}!
+        Анализ данных. Приветствуем, {user?.nameU}!
       </p>
 
       {/* --- БЛОК ФИЛЬТРОВ --- */}
@@ -324,9 +324,8 @@ const AnalyticsDashboard = ({ user, token }) => {
               </select>
             </div>
 
-            {/* Сенсор (col-md-3) */}
             <div className='col-md-3'>
-              <label className='form-label text-light'>Сенсор:</label>
+              <label className='form-label text-light'>Датчик:</label>
               <select
                 className='form-select dark-input'
                 value={selectedSensor}
@@ -334,7 +333,7 @@ const AnalyticsDashboard = ({ user, token }) => {
                 disabled={loading || sensorsForSelectedAsset.length === 0}
               >
                 {sensorsForSelectedAsset.length === 0 ? (
-                  <option value=''>Нет данных сенсоров для этого актива</option>
+                  <option value=''>Нет данных датчика для этого актива</option>
                 ) : (
                   sensorsForSelectedAsset.map((sensor) => (
                     <option
@@ -445,7 +444,7 @@ const AnalyticsDashboard = ({ user, token }) => {
             style={{ paddingTop: '150px' }}
           >
             {chartUpdateTrigger === 0
-              ? 'Выберите сенсор и нажмите "Обновить График".'
+              ? 'Выберите датчик и нажмите "Обновить График".'
               : 'Нет исторических данных для выбранных параметров.'}
           </p>
         )}
@@ -454,7 +453,7 @@ const AnalyticsDashboard = ({ user, token }) => {
       {/* --- ГРАФИК 2: ТЕКУЩЕЕ СОСТОЯНИЕ (Gauge Chart) --- */}
       {selectedSensor && currentStateData.length > 0 && (
         <div className='row g-3 mt-3'>
-          <h4 className='text-light mb-3'>Текущий Статус Сенсора: {selectedSensor}</h4>
+          <h4 className='text-light mb-3'>Текущее состояние датчика: {selectedSensor}</h4>
 
           {currentStateData
             .filter((item) => item.sensor_id === selectedSensor)
@@ -476,8 +475,8 @@ const AnalyticsDashboard = ({ user, token }) => {
 
       {!selectedSensor && currentStateData.length > 0 && (
         <div className='row g-3 mt-3'>
-          <h4 className='text-light mb-3'>Текущий Статус Сенсоров</h4>
-          <p className='text-muted'>Выберите сенсор в фильтре, чтобы увидеть его текущее состояние.</p>
+          <h4 className='text-light mb-3'>Текущее состояние датчика</h4>
+          <p className='text-muted'>Выберите датчик в фильтре, чтобы увидеть его текущее состояние.</p>
         </div>
       )}
     </div>
