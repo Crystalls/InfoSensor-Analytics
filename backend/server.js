@@ -32,7 +32,7 @@ const ASSET_REGISTRY = {
 }
 
 // соединение с MongoDB
-const mongoUri = 'mongodb://127.0.0.1:27017/newdb'
+const mongoUri = 'mongodb://127.0.0.1/newdb'
 
 // Схема для коллекции пользователей
 const userSchema = new mongoose.Schema({
