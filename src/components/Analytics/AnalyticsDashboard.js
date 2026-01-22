@@ -13,6 +13,13 @@ import {
   ResponsiveContainer,
   RadialBarChart,
   RadialBar,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  Legend,
+  ScatterChart,
+  Scatter,
 } from 'recharts'
 
 const AnalyticsDashboard = ({ user, token }) => {
@@ -30,12 +37,13 @@ const AnalyticsDashboard = ({ user, token }) => {
   const allowedAssets = user?.access_rights?.allowedAssets || []
 
   const today = moment().format('YYYY-MM-DD')
-  const threeMonthsAgo = moment().subtract(1, 'month').format('YYYY-MM-DD')
+  const threeMonthsAgo = moment().subtract(3, 'month').format('YYYY-MM-DD')
 
   const [selectedAsset, setSelectedAsset] = useState(allowedAssets[0] || '')
   const [selectedSensor, setSelectedSensor] = useState('')
   const [startDate, setStartDate] = useState(threeMonthsAgo)
   const [endDate, setEndDate] = useState(today)
+  const [chartType, setChartType] = useState('Line')
 
   const [chartUpdateTrigger, setChartUpdateTrigger] = useState(0)
 
@@ -349,7 +357,7 @@ const AnalyticsDashboard = ({ user, token }) => {
 
             {/* Начальная Дата (col-md-2) */}
             <div className='col-md-2'>
-              <label className='form-label text-light'>Начальная Дата:</label>
+              <label className='form-label text-light'>Начальная дата:</label>
               <input
                 type='date'
                 className='form-control dark-input'
@@ -360,13 +368,27 @@ const AnalyticsDashboard = ({ user, token }) => {
 
             {/* Конечная Дата (col-md-2) */}
             <div className='col-md-2'>
-              <label className='form-label text-light'>Конечная Дата:</label>
+              <label className='form-label text-light'>Конечная дата:</label>
               <input
                 type='date'
                 className='form-control dark-input'
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
+            </div>
+
+            {/* Добавляем выбор типа графика */}
+            <div className='col-md-2'>
+              <label className='form-label text-light'>Тип графика:</label>
+              <select
+                className='form-select dark-input'
+                value={chartType}
+                onChange={(e) => setChartType(e.target.value)}
+              >
+                <option value='Line'>Линейный</option>
+                <option value='Bar'>Столбчатый</option>
+                <option value='Area'>Областной</option>
+              </select>
             </div>
 
             {/* Кнопка (col-md-2) */}
@@ -403,33 +425,92 @@ const AnalyticsDashboard = ({ user, token }) => {
             width='100%'
             height='100%'
           >
-            <LineChart data={chartData}>
-              <CartesianGrid
-                strokeDasharray='3 3'
-                stroke='#444'
-              />
-              <XAxis
-                dataKey='time'
-                stroke='#ccc'
-                tickFormatter={(tick) => moment(tick).format('DD.MM HH:mm')}
-                interval='preserveStartEnd'
-              />
-              <YAxis stroke='#ccc' />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1e1e24', border: '1px solid #666', color: 'white' }}
-                labelFormatter={(label) => moment(label).format('YYYY-MM-DD HH:mm:ss')}
-                formatter={(value) => [`${value.toFixed(3)}`, `Значение`]}
-                position={{ y: -10, x: -10 }}
-              />
-              <Line
-                type='monotone'
-                dataKey='value'
-                stroke='#007bff'
-                strokeWidth={3}
-                dot={false}
-                name={`История ${selectedSensor}`}
-              />
-            </LineChart>
+            {/* УСЛОВНЫЙ РЕНДЕРИНГ ГРАФИКОВ */}
+            {chartType === 'Line' && (
+              <LineChart data={chartData}>
+                <CartesianGrid
+                  strokeDasharray='3 3'
+                  stroke='#444'
+                />
+                <XAxis
+                  dataKey='time'
+                  stroke='#ccc'
+                  tickFormatter={(tick) => moment(tick).format('DD.MM HH:mm')}
+                  interval='preserveStartEnd'
+                />
+                <YAxis stroke='#ccc' />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e1e24', border: '1px solid #666', color: 'white' }}
+                  labelFormatter={(label) => moment(label).format('YYYY-MM-DD HH:mm:ss')}
+                  formatter={(value) => [`${value.toFixed(3)}`, `Значение`]}
+                />
+                <Line
+                  type='monotone'
+                  dataKey='value'
+                  stroke='#007bff'
+                  strokeWidth={3}
+                  dot={false}
+                  name={`История ${selectedSensor}`}
+                />
+                <Legend wrapperStyle={{ color: '#fff' }} /> {/* Добавляем легенду */}
+              </LineChart>
+            )}
+
+            {chartType === 'Bar' && (
+              <BarChart data={chartData}>
+                <CartesianGrid
+                  strokeDasharray='3 3'
+                  stroke='#444'
+                />
+                <XAxis
+                  dataKey='time'
+                  stroke='#ccc'
+                  tickFormatter={(tick) => moment(tick).format('DD.MM HH:mm')}
+                  interval='preserveStartEnd'
+                />
+                <YAxis stroke='#ccc' />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e1e24', border: '1px solid #666', color: 'white' }}
+                  labelFormatter={(label) => moment(label).format('YYYY-MM-DD HH:mm:ss')}
+                  formatter={(value) => [`${value.toFixed(3)}`, `Значение`]}
+                />
+                <Bar
+                  dataKey='value'
+                  fill='#8884d8'
+                  name={`Значение ${selectedSensor}`}
+                />
+                <Legend wrapperStyle={{ color: '#fff' }} />
+              </BarChart>
+            )}
+
+            {chartType === 'Area' && (
+              <AreaChart data={chartData}>
+                <CartesianGrid
+                  strokeDasharray='3 3'
+                  stroke='#444'
+                />
+                <XAxis
+                  dataKey='time'
+                  stroke='#ccc'
+                  tickFormatter={(tick) => moment(tick).format('DD.MM HH:mm')}
+                  interval='preserveStartEnd'
+                />
+                <YAxis stroke='#ccc' />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e1e24', border: '1px solid #666', color: 'white' }}
+                  labelFormatter={(label) => moment(label).format('YYYY-MM-DD HH:mm:ss')}
+                  formatter={(value) => [`${value.toFixed(3)}`, `Значение`]}
+                />
+                <Area
+                  type='monotone'
+                  dataKey='value'
+                  stroke='#82ca9d'
+                  fill='#82ca9d'
+                  name={`Область ${selectedSensor}`}
+                />
+                <Legend wrapperStyle={{ color: '#fff' }} />
+              </AreaChart>
+            )}
           </ResponsiveContainer>
         ) : loading || optionsLoading ? (
           <div className='skeleton-chart-container p-4'>
