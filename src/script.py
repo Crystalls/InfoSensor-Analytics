@@ -25,7 +25,6 @@ SIMULATION_SCENARIOS = {
         "role": "engineer",
         "wsection": "Цех №2",        # Доступно инженеру в Цехе №2
         "asset": "Двигатель 1",      # Объект внутри Цеха №2
-        "type": "temperature",
         "params": {"mean": 29.73, "std_dev": 6.0, "unit": "гр Цельсия"},
     },
     "ENG_WORKSHOP2_ENGINE_1_PRESSURE": {
@@ -34,7 +33,6 @@ SIMULATION_SCENARIOS = {
         "role": "engineer",
         "wsection": "Цех №2",
         "asset": "Двигатель 1",      
-        "type": "pressure",
         "params": {"mean": 3.0, "std_dev": 0.1, "unit": "Па",
                    "thresholds": {"min": 2.5, "max": 4.0}},
     },
@@ -43,8 +41,7 @@ SIMULATION_SCENARIOS = {
         "sensor_type": "Датчик вибрации",
         "role": "engineer",
         "wsection": "Цех №2",
-        "asset": "Станок 5",         # Другой объект в Цехе №2
-        "type": "vibration",
+        "asset": "Станок 9",         # Другой объект в Цехе №2
         "params": {"mean": 0.8, "std_dev": 0.15, "unit": "мм/с"},
     },
     
@@ -55,7 +52,6 @@ SIMULATION_SCENARIOS = {
         "role": "scientist",
         "wsection": "Поле А",
         "asset": "Почва поля",  # Объект внутри Поля А
-        "type": "moisture",
         "params": {"mean": 78.0, "std_dev": 5.0, "unit": "%"},
     },
     "SCI_A_FIELD_A_TEMP": {
@@ -64,7 +60,6 @@ SIMULATION_SCENARIOS = {
         "role": "scientist",
         "wsection": "Поле А",
         "asset": "Почва поля",  # Объект внутри Поля А
-        "type": "temperature",
         "params": {"mean": 27.0, "std_dev": 9.0, "unit": "гр Цельсия"},
     },
         "SCI_A_FIELD_A_ACID": {
@@ -73,7 +68,6 @@ SIMULATION_SCENARIOS = {
         "role": "scientist",
         "wsection": "Поле А",
         "asset": "Почва поля",  # Объект внутри Поля А
-        "type": "acid",
         "params": {"mean": 4.6, "std_dev": 0.5, "unit": "pH"},
     },
         "SCI_A_FIELD_A_SALINITY": {
@@ -82,45 +76,33 @@ SIMULATION_SCENARIOS = {
         "role": "scientist",
         "wsection": "Поле А",
         "asset": "Почва поля",  # Объект внутри Поля А
-        "type": "salinity",
         "params": {"mean": 8.6, "std_dev": 1.5, "unit": "мСм/см"},
     },
         "SCI_A_FIELD_A_CARBONDIOXID": {
-        "sensor_id": "SNSR-0176",
+        "sensor_id": "SNSR-0116",
         "sensor_type": "Датчик углекислого газа",
         "role": "scientist",
         "wsection": "Поле А",
         "asset": "Теплица",  # Объект внутри Поля А
-        "type": "carbon_dioxide",
         "params": {"mean": 1900, "std_dev": 450, "unit": "кг/га"},
     },
         # --- Сценарий для Инженера (Цех №1) ---
-    "ENG_WORKSHOP1_PUMP_1_TEMP": {
-        "sensor_id": "SNSR-0231", 
-        "sensor_type": "Датчик температуры",
-        "role": "engineer",
-        "wsection": "Цех №1",        # Доступно инженеру в Цехе №2
-        "asset": "Насосная станция",      # Объект внутри Цеха №2
-        "type": "temperature",
-        "params": {"mean": 29.73, "std_dev": 1.0, "unit": "гр Цельсия"},
-    },
+
     "ENG_WORKSHOP1_TURNING MACHINE_1_PRESSURE": {
         "sensor_id": "SNSR-0202", 
         "sensor_type": "Датчик давления",
         "role": "engineer",
         "wsection": "Цех №1",
         "asset": "Токарный станок",      
-        "type": "pressure",
         "params": {"mean": 3.0, "std_dev": 0.1, "unit": "Па",
                    "thresholds": {"min": 2.5, "max": 4.0}},
     },
     "ENG_WORKSHOP1_CNC_MACHINE_1_VIBRO": {
-        "sensor_id": "SNSR-01304", 
+        "sensor_id": "SNSR-423", 
         "sensor_type": "Датчик вибрации",
         "role": "engineer",
         "wsection": "Цех №1",
         "asset": "Станок ЧПУ",         # Другой объект в Цехе №2
-        "type": "vibration",
         "params": {"mean": 0.8, "std_dev": 0.15, "unit": "мм/с"},
     },
         "ENG_WORKSHOP2_LIQUID_1_": {
@@ -129,7 +111,6 @@ SIMULATION_SCENARIOS = {
         "role": "engineer",
         "wsection": "Цех №1",
         "asset": "Станок 5",         # Другой объект в Цехе №2
-        "type": "luquid",
         "params": {"mean": 890, "std_dev": 36, "unit": "мл"},
     },
 }
@@ -179,7 +160,6 @@ def generate_and_store_data(scenarios):
             "sensor_type": config['sensor_type'],
 
         }
-        
         current_bulk_ops.append(UpdateOne(
             {"sensor_id": config['sensor_id']}, 
             {"$set": current_record},

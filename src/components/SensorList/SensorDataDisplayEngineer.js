@@ -44,7 +44,11 @@ function SensorDataDisplayEngineer() {
     // 2. Проверка max_value (Температура, Вибрация)
     const alertValue = thresholdConfig.max_value
     if (alertValue !== undefined) {
-      if (lowerCaseType.includes('температур') || lowerCaseType.includes('вибрац') || lowerCaseType.includes('влажн')) {
+      if (
+        lowerCaseType.includes('температур') ||
+        lowerCaseType.includes('вибраци') ||
+        lowerCaseType.includes('влажн')
+      ) {
         return value > alertValue
       }
       // Проверка уровня (по min)
@@ -282,7 +286,6 @@ function SensorDataDisplayEngineer() {
                                           toggleItemExpand('SENSOR', sectionName, assetName, data.sensor_id)
                                         }
                                       >
-                                        {/* ВОССТАНОВЛЕННЫЙ ТЕГ: h1 для стилей */}
                                         <p className='title'>
                                           ID Датчика: {data.sensor_id}
                                           <br></br>

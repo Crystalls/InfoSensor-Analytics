@@ -26,9 +26,9 @@ app.use(express.json())
 
 // --- 1. КОНФИГУРАЦИЯ ДОСТУПА (Справочник активов на основе Цеха) ---
 const ASSET_REGISTRY = {
-  'Цех №2': ['Двигатель 1', 'Станок 5', 'Насосная Станция'],
-  'Поле А': ['Почва поля', 'Теплица'],
-  'Цех №1': ['Токарный станок', 'Станок ЧПУ', 'Паровой станок', 'Насосная Станция', 'Станок 5'],
+  'Цех №2': ['Двигатель 1', 'Станок 9', 'Насосная Станция'],
+  'Поле А': ['Почва поля', 'Теплица', 'Пестицидная'],
+  'Цех №1': ['Токарный станок', 'Станок ЧПУ', 'Паровой станок', 'Станок 5'],
 }
 
 // соединение с MongoDB
@@ -651,11 +651,37 @@ app.get('/api/assets', (req, res) => {
 })
 
 app.get('/api/overview-stats', authenticateToken, async (req, res) => {
-  try {
-    const totalSensors = await SensorCurrentStateModel.countDocuments({})
-    const activeAlerts = await SensorCurrentStateModel.countDocuments({ value: { $gt: 10 } })
+  const { access_rights, profession, wsection } = req.user
 
-    const latestReading = await SensorCurrentStateModel.findOne()
+  // Определяем фильтр для данных сенсоров (SensorCurrentStateModel)
+  let sensorFilter = {}
+  if (access_rights.allowedAssets && access_rights.allowedAssets.length > 0) {
+    sensorFilter.asset = { $in: access_rights.allowedAssets }
+  } else if (profession !== 'admin' && wsection) {
+    // Для ученых (scientist) фильтруем по цеху, если нет явных прав на активы
+    sensorFilter.wsection = { $in: access_rights.allowedSections }
+  }
+
+  // Определяем фильтр для тревог
+  let alertFilter = {}
+  if (access_rights.allowedAssets && access_rights.allowedAssets.length > 0) {
+    alertFilter.asset = { $in: access_rights.allowedAssets }
+  } else if (profession !== 'admin' && wsection) {
+    alertFilter.wsection = { $in: access_rights.allowedSections }
+  }
+  // Дополнительно фильтруем только активные (не прочитанные и не решенные)
+  alertFilter.$and = [{ isRead: false }, { resolvedBy: { $exists: false } }]
+
+  try {
+    // 1. Общее количество доступных сенсоров (уникальные sensor_id в пределах разрешенных данных)
+    const totalSensorIds = await SensorCurrentStateModel.distinct('sensor_id', sensorFilter)
+    const totalSensors = totalSensorIds.length
+
+    // 2. Количество активных (нерешенных/непрочитанных) тревог
+    const activeAlertsCount = await SensorAlertModel.countDocuments(alertFilter)
+
+    // 3. Время последнего обновления данных
+    const latestReading = await SensorCurrentStateModel.findOne(sensorFilter)
       .sort({ last_updated: -1 })
       .select('last_updated')
       .lean()
@@ -664,7 +690,7 @@ app.get('/api/overview-stats', authenticateToken, async (req, res) => {
 
     res.status(200).json({
       totalSensors,
-      activeAlerts: activeAlerts,
+      activeAlerts: activeAlertsCount,
       lastUpdated,
     })
   } catch (error) {
@@ -1013,6 +1039,7 @@ app.get('/api/user-zone-summary', authenticateToken, async (req, res) => {
 
     currentStates.forEach((state) => {
       const assetName = state.asset
+      let latestTimestamp = new Date(state.last_updated)
 
       if (!assetSummary.has(assetName)) {
         assetSummary.set(assetName, {
@@ -1020,8 +1047,8 @@ app.get('/api/user-zone-summary', authenticateToken, async (req, res) => {
           workshop: userWorkshop,
           totalSensors: 0,
           alarmSensors: 0,
-          lastReading: state.historicalvalue ? state.historicalvalue.toFixed(2) : 'N/A',
-          lastUpdated: new Date(state.last_updated).toLocaleTimeString(),
+          lastReading: state.value ? state.value.toFixed(2) : 'N/A',
+          lastUpdated: latestTimestamp.toLocaleTimeString(),
         })
       }
 
@@ -1035,9 +1062,11 @@ app.get('/api/user-zone-summary', authenticateToken, async (req, res) => {
         summary.alarmSensors++
       }
 
-      // Обновляем последнюю временную метку (самая последняя запись в currentStates будет самой свежей)
-      summary.lastReading = state.historicalvalue ? state.historicalvalue.toFixed(2) : 'N/A'
-      summary.lastUpdated = new Date(state.last_updated).toLocaleTimeString()
+      // Обновляем последнюю временную метку
+      if (new Date(state.last_updated) > new Date(summary.lastUpdated)) {
+        summary.lastReading = state.value ? state.value.toFixed(2) : 'N/A'
+        summary.lastUpdated = new Date(state.last_updated).toLocaleTimeString()
+      }
     })
 
     // 4. Финализируем статус для каждого актива
@@ -1075,10 +1104,16 @@ app.get('/api/historical-data', authenticateToken, async (req, res) => {
   }
 
   try {
-    // Используем Date объекты для корректного сравнения с полем типа Date в БД
+    // ЗАГРУЗКА ПОРОГОВ
+    const allThresholdConfigs = await ThresholdByTypeModel.find({}).lean()
+    const thresholdsMap = new Map(
+      allThresholdConfigs.map((c) => [c.sensor_type, { min: c.min_value, max: c.max_value }]),
+    )
+
+    // Запрос данных
     const query = {
       asset: asset,
-      sensor_id: sensorId,
+      sensor_id: sensorId, // Фильтруем по sensorId, который пришел
       timestamp: {
         $gte: new Date(startDate),
         $lte: new Date(endDate + 'T23:59:59.999Z'),
@@ -1086,14 +1121,44 @@ app.get('/api/historical-data', authenticateToken, async (req, res) => {
     }
 
     const data = await SensorDataHistory.find(query)
-      .select('timestamp historicalvalue') // <-- Используем timestamp и historicalvalue
+      // Добавляем sensor_type, чтобы знать, какой порог применить
+      .select('timestamp historicalvalue sensor_type')
       .sort({ timestamp: 1 })
       .lean()
 
-    const chartData = data.map((item) => ({
-      time: new Date(item.timestamp).toISOString(),
-      value: item.historicalvalue, // <-- Используем historicalvalue
-    }))
+    // Агрегация и расчет событий
+    const chartData = data.map((item) => {
+      const rawValue = item.historicalvalue
+      const numericValue = parseFloat(rawValue)
+
+      const sensorType = item.sensor_type
+      const thresholds = thresholdsMap.get(sensorType) || {}
+
+      const value = parseFloat(item.historicalvalue)
+      const minValue = parseFloat(thresholds.min)
+      const maxValue = parseFloat(thresholds.max)
+
+      let eventCount = 0
+
+      if (isNaN(value) || isNaN(minValue) || isNaN(maxValue)) {
+        console.warn(
+          `[Historical Data] Skipping threshold check for ${sensorType} due to NaN: Value=${value}, Min=${thresholds.min}, Max=${thresholds.max}`,
+        )
+      }
+
+      // Проверка, если значение превысило любой порог
+      if (!isNaN(value) && !isNaN(minValue) && !isNaN(maxValue)) {
+        if (value < minValue || value > maxValue) {
+          eventCount = 1 // Засчитываем одно событие в этой точке
+        }
+      }
+
+      return {
+        time: new Date(item.timestamp).toISOString(),
+        value: numericValue,
+        eventCount: eventCount,
+      }
+    })
 
     res.status(200).json({ chartData })
   } catch (error) {
@@ -1103,16 +1168,34 @@ app.get('/api/historical-data', authenticateToken, async (req, res) => {
 })
 
 app.get('/api/config/sensor-options', authenticateToken, async (req, res) => {
-  const allowedAssets = req.user.access_rights?.allowedAssets
+  const { allowedAssets, allowedSections } = req.user.access_rights
 
-  if (!allowedAssets || allowedAssets.length === 0) {
+  if ((!allowedAssets || allowedAssets.length === 0) && (!allowedSections || allowedSections.length === 0)) {
     return res.status(200).json({ assetSensorMap: {} })
   }
 
   try {
-    // 1. Находим все уникальные пары (asset, sensor_id, sensor_type) для разрешенных активов
+    const matchConditions = []
+    // 1. Фильтр по явно разрешенным АКТИВАМ
+    if (allowedAssets && allowedAssets.length > 0) {
+      matchConditions.push({ asset: { $in: allowedAssets } })
+    }
+
+    // 2. Фильтр по разрешенным ЦЕХАМ (на случай, если allowedAssets пуст или для более широкого доступа)
+    if (allowedSections && allowedSections.length > 0) {
+      matchConditions.push({ wsection: { $in: allowedSections } })
+    }
+
+    // 3. Если обе стороны не заданы
+    if (matchConditions.length === 0) {
+      return res.status(200).json({ assetSensorMap: {} })
+    }
+
+    // Находим все уникальные пары (asset, sensor_id, sensor_type) для разрешенных активов
     const distinctData = await SensorCurrentStateModel.aggregate([
-      { $match: { asset: { $in: allowedAssets } } },
+      {
+        $match: { $or: matchConditions },
+      },
       {
         $group: {
           _id: {
@@ -1132,7 +1215,7 @@ app.get('/api/config/sensor-options', authenticateToken, async (req, res) => {
       },
     ])
 
-    // 2. Преобразуем результат в Map: { "Asset Name": [{id: "...", type: "..."}] }
+    // Преобразуем результат в Map: { "Asset Name": [{id: "...", type: "..."}] }
     const assetSensorMap = {}
 
     distinctData.forEach((doc) => {
@@ -1367,14 +1450,20 @@ app.get('/api/reports/generate', authenticateToken, async (req, res) => {
 
     // --- 1. ПОЛУЧЕНИЕ И ФОРМАТИРОВАНИЕ ДАННЫХ ---
     if (reportType === 'SENSOR_HISTORY') {
-      // ... (Логика получения данных) ...
-      reportData = await SensorDataHistory.find({
+      const userWSection = req.user.wsection
+      const userProfession = req.user.profession
+      let findQuery = {
         asset: asset,
         sensor_id: sensorId,
         timestamp: { $gte: start, $lte: end },
-      })
-        .sort({ timestamp: 1 })
-        .lean()
+      }
+
+      if (userProfession === 'scientist' || userProfession === 'engineer') {
+        // Ученые/Инженеры должны иметь доступ только к данным из своего цеха
+        findQuery.wsection = userWSection
+      }
+
+      reportData = await SensorDataHistory.find(findQuery).sort({ timestamp: 1 }).lean()
 
       if (reportData.length === 0) {
         return res.status(404).json({ message: 'Данные для отчета не найдены.' })

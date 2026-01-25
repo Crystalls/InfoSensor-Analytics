@@ -47,7 +47,7 @@ const AnalyticsDashboard = ({ user, token }) => {
 
   const [chartUpdateTrigger, setChartUpdateTrigger] = useState(0)
 
-  // --- ФУНКЦИИ ЗАГРУЗКИ (Остаются стабильными) ---
+  // --- ФУНКЦИИ ЗАГРУЗКИ ---
 
   const fetchFilterOptions = useCallback(async () => {
     if (!token) {
@@ -139,6 +139,23 @@ const AnalyticsDashboard = ({ user, token }) => {
       }
     }
     return { min: 0, max: 100, title: sensorId }
+  }
+
+  const CustomizedDot = ({ cx, cy, payload, eventData, eventKey = 'eventCount' }) => {
+    // payload содержит данные одной точки, включая 'value' и 'eventCount'
+    if (payload[eventKey] > 0) {
+      // Если событие произошло, рисуем красный квадрат
+      return (
+        <rect
+          x={cx - 4} // Центрируем квадрат 8x8px
+          y={cy - 4}
+          width={8}
+          height={8}
+          fill='#dc3545'
+        />
+      )
+    }
+    return null // Не рисуем ничего, если события нет
   }
 
   // --- ЭФФЕКТЫ И POLLING ---
@@ -388,6 +405,7 @@ const AnalyticsDashboard = ({ user, token }) => {
                 <option value='Line'>Линейный</option>
                 <option value='Bar'>Столбчатый</option>
                 <option value='Area'>Областной</option>
+                <option value='Combined'>Комбинированный</option>
               </select>
             </div>
 
@@ -481,6 +499,74 @@ const AnalyticsDashboard = ({ user, token }) => {
                 />
                 <Legend wrapperStyle={{ color: '#fff' }} />
               </BarChart>
+            )}
+
+            {chartType === 'Combined' && (
+              <LineChart
+                data={chartData}
+                margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid
+                  strokeDasharray='3 3'
+                  stroke='#444'
+                />
+
+                {/* ОСЬ Y (Для значения) */}
+                <XAxis
+                  dataKey='time'
+                  stroke='#ccc'
+                  tickFormatter={(tick) => moment(tick).format('DD.MM HH:mm')}
+                  interval='preserveStartEnd'
+                />
+                <YAxis
+                  yAxisId='left'
+                  stroke='#007bff'
+                  domain={['dataMin - 10%', 'dataMax + 10%']}
+                />
+
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#5e5eee', border: '1px solid #000000', color: 'white' }}
+                  labelFormatter={(label) => moment(label).format('YYYY-MM-DD HH:mm:ss')}
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length > 0) {
+                      const fullPointData = payload[0].payload
+
+                      const time = moment(label).format('YYYY-MM-DD HH:mm:ss')
+                      const value =
+                        fullPointData.value !== undefined ? parseFloat(fullPointData.value).toFixed(3) : 'N/A'
+                      const eventCount = fullPointData.eventCount !== undefined ? fullPointData.eventCount : 0
+
+                      return (
+                        <div style={{ padding: '10px', backgroundColor: '#333', border: '1px solid #000' }}>
+                          <p className='text-light'>Time: {time}</p>
+                          <p style={{ color: '#007bff' }}>
+                            Значение ({selectedSensor}): {value}
+                          </p>
+                          <p style={{ color: '#dc3545' }}>Событие (Превышение порога): {eventCount} шт</p>
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+                <Legend wrapperStyle={{ color: '#fff' }} />
+
+                {/* ЛИНИЯ: Значение */}
+                <Line
+                  yAxisId='left'
+                  type='monotone'
+                  dataKey='value'
+                  stroke='#ffffff'
+                  strokeWidth={2}
+                  dot={
+                    <CustomizedDot
+                      eventData={chartData}
+                      eventKey='eventCount'
+                    />
+                  }
+                  name={`Значение ${selectedSensor}`}
+                />
+              </LineChart>
             )}
 
             {chartType === 'Area' && (

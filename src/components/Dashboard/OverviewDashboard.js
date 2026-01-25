@@ -64,7 +64,7 @@ const OverviewDashboard = ({ user, token }) => {
 
   return (
     <div className='container mt-4'>
-      <h1>Общий Обзор Системы</h1>
+      <h1>Общий обзор системы</h1>
       <p className='lead'>
         Добро пожаловать, {user?.nameU} ({user?.profession})!
       </p>
@@ -72,13 +72,13 @@ const OverviewDashboard = ({ user, token }) => {
       <div className='row mt-4'>
         <div className='col-md-4'>
           <div className='card text-center p-3 bg-light'>
-            <h3>Всего Сенсоров</h3>
+            <h3>Всего датчиков</h3>
             <p className='display-4'>{stats.totalSensors}</p>
           </div>
         </div>
         <div className='col-md-4'>
           <div className='card text-center p-3 bg-light'>
-            <h3>Активные Оповещения</h3>
+            <h3>Активные оповещения</h3>
             <p className={`display-4 ${stats.activeAlerts > 0 ? 'text-danger' : 'text-success'}`}>
               {stats.activeAlerts}
             </p>
@@ -86,13 +86,13 @@ const OverviewDashboard = ({ user, token }) => {
         </div>
         <div className='col-md-4'>
           <div className='card text-center p-3 bg-light'>
-            <h3>Последнее Обновление</h3>
+            <h3>Последнее обновление</h3>
             <p className='lead text-primary'>{formatLastUpdated(stats.lastUpdated)}</p>
           </div>
         </div>
       </div>
 
-      <h2 className='mt-5'>Сводка по Вашим Зонам Ответственности</h2>
+      <h2 className='mt-5'>Сводка по вашим зонам ответственности</h2>
       <ZoneSummary token={token} />
     </div>
   )
