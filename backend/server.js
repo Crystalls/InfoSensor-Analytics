@@ -15,7 +15,7 @@ const { type } = require('os')
 require('moment/locale/ru')
 
 const app = express()
-const port = 3001
+const port = process.env.PORT || 3001
 
 app.use(
   cors({
@@ -23,6 +23,8 @@ app.use(
   }),
 )
 app.use(express.json())
+
+app.use(express.static(path.join(__dirname, '..', 'build')))
 
 // --- 1. КОНФИГУРАЦИЯ ДОСТУПА (Справочник активов на основе Цеха) ---
 const ASSET_REGISTRY = {
@@ -519,11 +521,6 @@ app.post('/login', async (req, res) => {
 })
 
 app.use((req, res, next) => {
-  // Проверяем, является ли роут публичным, и если да, пропускаем Middleware
-  if (req.path === '/login' || req.path === '/register') {
-    return next()
-  }
-
   const authHeader = req.headers.authorization
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -1666,6 +1663,22 @@ app.get('/api/workshops', authenticateToken, async (req, res) => {
     console.error('Error fetching workshops:', error)
     res.status(500).json({ workshops: [] })
   }
+})
+
+app.use((req, res, next) => {
+  if (req.method === 'GET') {
+    res.sendFile(path.join(__dirname, '..', 'build', 'index.html'))
+  } else {
+    // Если это не GET-запрос (например, POST, PUT, DELETE),
+    // и он не был обработан ранее, это означает, что для него нет роута.
+    // Это будет 404 Not Found.
+    next()
+  }
+})
+
+app.use((err, req, res, next) => {
+  console.error('Unhandled Server Error:', err.stack)
+  res.status(500).json({ message: 'Internal Server Error', error: err.message })
 })
 
 mongoose
