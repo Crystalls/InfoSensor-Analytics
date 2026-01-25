@@ -22,7 +22,7 @@ app.use(
     exposedHeaders: ['Content-Disposition'],
   }),
 )
-app.use(express.json())
+app.use(express.static(path.join(__dirname, '..', 'build')))
 
 // --- 1. КОНФИГУРАЦИЯ ДОСТУПА (Справочник активов на основе Цеха) ---
 const ASSET_REGISTRY = {
@@ -518,35 +518,35 @@ app.post('/login', async (req, res) => {
   }
 })
 
-// app.use((req, res, next) => {
-//   // Проверяем, является ли роут публичным, и если да, пропускаем Middleware
-//   if (req.path === '/login' || req.path === '/register') {
-//     return next()
-//   }
+app.use((req, res, next) => {
+  // Проверяем, является ли роут публичным, и если да, пропускаем Middleware
+  if (req.path === '/login' || req.path === '/register') {
+    return next()
+  }
 
-//   const authHeader = req.headers.authorization
+  const authHeader = req.headers.authorization
 
-//   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-//     // Если нет заголовка Authorization (например, на /sensor-data при первом запросе без токена)
-//     console.warn(`Unauthorized access attempt on path: ${req.path}`)
-//     return res.status(401).json({ message: 'Невозможно подключиться. Неверный токен.' })
-//   }
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Если нет заголовка Authorization (например, на /sensor-data при первом запросе без токена)
+    console.warn(`Unauthorized access attempt on path: ${req.path}`)
+    return res.status(401).json({ message: 'Невозможно подключиться. Неверный токен.' })
+  }
 
-//   const token = authHeader.split(' ')[1] // Берем только сам токен
+  const token = authHeader.split(' ')[1] // Берем только сам токен
 
-//   jwt.verify(token, jwtSecret, (err, userPayload) => {
-//     if (err) {
-//       console.error('JWT verification error:', err.message)
-//       return res.status(401).json({ message: 'Невалидный или просроченный токен.' })
-//     }
+  jwt.verify(token, jwtSecret, (err, userPayload) => {
+    if (err) {
+      console.error('JWT verification error:', err.message)
+      return res.status(401).json({ message: 'Невалидный или просроченный токен.' })
+    }
 
-//     // ТОЛЬКО устанавливаем данные из токена в запрос
-//     req.user = userPayload
+    // ТОЛЬКО устанавливаем данные из токена в запрос
+    req.user = userPayload
 
-//     console.log('JWT verified. User data in req.user:', userPayload)
-//     next() // Передаем управление следующему Middleware или роуту
-//   })
-// })
+    console.log('JWT verified. User data in req.user:', userPayload)
+    next() // Передаем управление следующему Middleware или роуту
+  })
+})
 
 // GET /sensor-data (Получение данных)
 app.get('/sensor-data', async (req, res) => {
@@ -1666,6 +1666,10 @@ app.get('/api/workshops', authenticateToken, async (req, res) => {
     console.error('Error fetching workshops:', error)
     res.status(500).json({ workshops: [] })
   }
+})
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'build', 'index.html'))
 })
 
 mongoose

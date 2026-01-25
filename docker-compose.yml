@@ -28,7 +28,7 @@ services:
     depends_on:
       - backend
     environment:
-      REACT_APP_BACKEND_URL: http://localhost:5000 # Adjust if needed
+      REACT_APP_BACKEND_URL: http://192.162.1.1:5000 # Adjust if needed
     volumes:
       - ./frontend:/app
       - /app/node_modules
