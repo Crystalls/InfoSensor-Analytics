@@ -619,7 +619,7 @@ app.post('/api/assets', authenticateToken, async (req, res) => {
 
     // --- 2. ИНИЦИАЛИЗАЦИЯ ДАННЫХ В SensorCurrentState и SensorDataHistory ---
     // Вызываем функцию, которая вставляет начальные записи
-    await initializeNewAssetSensors(newAsset)
+    await initializeNewAssetSensors(newAsset, req.user)
 
     res.status(201).json({ message: 'Актив успешно создан.', asset: newAsset })
   } catch (error) {
@@ -1606,7 +1606,7 @@ app.get('/api/reports/generate', authenticateToken, async (req, res) => {
   }
 })
 
-async function initializeNewAssetSensors(newAsset) {
+async function initializeNewAssetSensors(newAsset, userContext) {
   const assetName = newAsset.assetName
   const workshop = newAsset.workshop
   const timestamp = new Date()
@@ -1623,7 +1623,7 @@ async function initializeNewAssetSensors(newAsset) {
       timestamp: timestamp,
       last_updated: timestamp,
       sensor_type: s.sensorType,
-      role: user.profession,
+      role: userContext.profession,
       wsection: workshop,
       asset: assetName,
       value: 20, // Начальное тестовое значение
