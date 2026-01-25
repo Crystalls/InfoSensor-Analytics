@@ -407,7 +407,7 @@ function startAlertScheduler() {
 
 // --- Регистрация ---
 app.post(
-  '/register',
+  '/api/register',
   [
     // Валидация
     check('username', 'Логин обязателен').notEmpty(),
@@ -461,7 +461,7 @@ app.post(
 )
 
 // --- Login Endpoint (Где мы вычисляем права доступа) ---
-app.post('/login', async (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { loginIdentifier, password } = req.body
   console.log('--- SERVER: Login Attempt ---')
   console.log('Identifier SENT:', loginIdentifier)
@@ -546,7 +546,7 @@ app.use((req, res, next) => {
 })
 
 // GET /sensor-data (Получение данных)
-app.get('/sensor-data', async (req, res) => {
+app.get('/api/sensor-data', async (req, res) => {
   try {
     if (!req.user || !req.user.access_rights) {
       return res.status(403).json({ message: 'Access rights missing in token.' })
