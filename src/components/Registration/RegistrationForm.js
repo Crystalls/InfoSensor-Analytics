@@ -88,7 +88,7 @@ function RegistrationForm() {
     }
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/register`, formData)
+      const response = await axios.post(`${API_BASE_URL}/api/register`, formData)
       setMessage('Регистрация прошла успешно!')
       navigate('/Home')
     } catch (err) {

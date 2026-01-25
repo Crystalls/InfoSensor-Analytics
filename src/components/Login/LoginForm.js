@@ -17,7 +17,7 @@ function LoginForm({ onLogin }) {
 
     try {
       console.log('Sending to /login:', { loginIdentifier, password })
-      const response = await axios.post(`${API_BASE_URL}/login`, {
+      const response = await axios.post(`${API_BASE_URL}/api/login`, {
         // API Endpoint
         loginIdentifier: loginIdentifier,
         password,
