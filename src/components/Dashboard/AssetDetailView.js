@@ -116,7 +116,7 @@ const AssetDetailView = ({ token }) => {
         &larr; Вернуться к реестру
       </button>
 
-      <h1>Детали Актива: {details.name || assetName}</h1>
+      <h1>Детали актива: {details.name || assetName}</h1>
 
       {/* ... (Общая Информация остается прежней) ... */}
 
@@ -183,9 +183,9 @@ const AssetDetailView = ({ token }) => {
         className='btn btn-warning me-2'
         onClick={() => setIsConfigModalOpen(true)}
       >
-        Редактировать Конфигурацию
+        Редактировать конфигурацию
       </button>
-      <button className='btn btn-secondary'>Управление Ремонтом</button>
+      <button className='btn btn-secondary'>Управление ремонтом</button>
 
       {/* --- МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ --- */}
       {isConfigModalOpen && (

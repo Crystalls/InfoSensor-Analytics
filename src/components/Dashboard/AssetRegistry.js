@@ -117,7 +117,7 @@ const AssetRegistry = ({ user, token, onTokenUpdate }) => {
             className='btn btn-success mt-3'
             onClick={() => setShowAddModal(true)}
           >
-            Добавить Новый Актив
+            Добавить новый актив
           </button>
         )}
 
@@ -150,10 +150,10 @@ const AssetRegistry = ({ user, token, onTokenUpdate }) => {
         <thead>
           <tr>
             <th>#</th>
-            <th>Название Актива</th>
+            <th>Название актива</th>
             <th>Цех</th>
             <th>Статус</th>
-            <th>Последнее Значение</th>
+            <th>Последнее значение</th>
             <th>Время</th>
             <th>Действия</th>
           </tr>
@@ -196,7 +196,7 @@ const AssetRegistry = ({ user, token, onTokenUpdate }) => {
           className='btn btn-success mt-3'
           onClick={() => setShowAddModal(true)}
         >
-          Добавить Новый Актив
+          Добавить новый актив
         </button>
       )}
 

@@ -10,11 +10,11 @@ const AddAssetModal = ({ onClose, onSubmit, availableWorkshops, engineerName }) 
     setError('')
 
     if (!assetName.trim()) {
-      setError('Имя Актива не может быть пустым.')
+      setError('Имя актива не может быть пустым.')
       return
     }
     if (!workshop) {
-      setError('Необходимо выбрать Цех.')
+      setError('Необходимо выбрать сектор.')
       return
     }
 
@@ -68,7 +68,7 @@ const AddAssetModal = ({ onClose, onSubmit, availableWorkshops, engineerName }) 
         className='p-4'
         onClick={(e) => e.stopPropagation()}
       >
-        <h5 className='text-warning border-bottom pb-2 mb-3'>Добавить Новый Актив</h5>
+        <h5 className='text-warning border-bottom pb-2 mb-3'>Добавить новый актив</h5>
 
         {error && <div className='alert alert-danger p-2 mb-3'>{error}</div>}
 
@@ -78,7 +78,7 @@ const AddAssetModal = ({ onClose, onSubmit, availableWorkshops, engineerName }) 
               className='form-label'
               style={{ color: 'white' }}
             >
-              Название Актива (Уникальное):
+              Название актива (Уникальное):
             </label>
             <input
               type='text'
@@ -94,7 +94,7 @@ const AddAssetModal = ({ onClose, onSubmit, availableWorkshops, engineerName }) 
               className='form-label'
               style={{ color: 'white' }}
             >
-              Рабочий Цех:
+              Рабочий сектор:
             </label>
             <select
               className='form-select'

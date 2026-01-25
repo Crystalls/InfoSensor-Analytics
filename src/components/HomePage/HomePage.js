@@ -18,7 +18,7 @@ const Home = () => {
       </div>
       <div className='maininfo'>
         <section data-aos='fade-up'>
-          <h2>Наши Услуги</h2>
+          <h2>Наши услуги</h2>
           <img
             src={serviceImage}
             alt='Услуги'
@@ -61,7 +61,7 @@ const Home = () => {
           </ul>
         </section>
         <section data-aos='fade-up'>
-          <h2>Тарифные Планы</h2>
+          <h2>Тарифные планы</h2>
           <img
             src={pricingImage}
             alt='Тарифные планы'

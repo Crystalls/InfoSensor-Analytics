@@ -47,7 +47,7 @@ const AssetEditor = ({ assetData, token, onClose, onUpdateSuccess }) => {
           <div className='modal-content'>
             <form onSubmit={handleSubmit}>
               <div className='modal-header bg-warning text-dark'>
-                <h5 className='modal-title'>Редактирование Актива: {assetData.name}</h5>
+                <h5 className='modal-title'>Редактирование актива: {assetData.name}</h5>
                 <button
                   type='button'
                   className='btn-close'
@@ -59,7 +59,7 @@ const AssetEditor = ({ assetData, token, onClose, onUpdateSuccess }) => {
                 {error && <div className='alert alert-danger'>{error}</div>}
 
                 <div className='mb-3'>
-                  <label className='form-label'>Цех</label>
+                  <label className='form-label'>Рабочий сектор</label>
                   <input
                     type='text'
                     className='form-control'
@@ -69,7 +69,7 @@ const AssetEditor = ({ assetData, token, onClose, onUpdateSuccess }) => {
                   />
                 </div>
                 <div className='mb-3'>
-                  <label className='form-label'>Ответственный Инженер</label>
+                  <label className='form-label'>Ответственный инженер</label>
                   <input
                     type='text'
                     className='form-control'

@@ -529,7 +529,7 @@ app.use((req, res, next) => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     // Если нет заголовка Authorization (например, на /sensor-data при первом запросе без токена)
     console.warn(`Unauthorized access attempt on path: ${req.path}`)
-    return res.status(401).json({ message: 'Токен авторизации отсутствует или имеет неверный формат.' })
+    return res.status(401).json({ message: 'хуй.' })
   }
 
   const token = authHeader.split(' ')[1] // Берем только сам токен
