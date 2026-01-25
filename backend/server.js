@@ -22,7 +22,7 @@ app.use(
     exposedHeaders: ['Content-Disposition'],
   }),
 )
-app.use(express.static(path.join(__dirname, '..', 'build')))
+app.use(express.json())
 
 // --- 1. КОНФИГУРАЦИЯ ДОСТУПА (Справочник активов на основе Цеха) ---
 const ASSET_REGISTRY = {
@@ -1666,10 +1666,6 @@ app.get('/api/workshops', authenticateToken, async (req, res) => {
     console.error('Error fetching workshops:', error)
     res.status(500).json({ workshops: [] })
   }
-})
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'build', 'index.html'))
 })
 
 mongoose
