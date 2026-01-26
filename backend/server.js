@@ -521,6 +521,9 @@ app.post('/api/login', async (req, res) => {
 })
 
 app.use((req, res, next) => {
+  if (req.path === '/api/login' || req.path === '/api/register') {
+    return next()
+  }
   const authHeader = req.headers.authorization
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

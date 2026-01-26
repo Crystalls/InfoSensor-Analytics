@@ -170,7 +170,7 @@ function SensorDataDisplayEngineer() {
     setError('')
     try {
       if (!token) throw new Error('Authentication token is missing')
-      const response = await axios.get(`${API_BASE_URL}/sensor-data`, {
+      const response = await axios.get(`${API_BASE_URL}/api/sensor-data`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const initialData = response.data.filter(
