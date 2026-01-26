@@ -178,5 +178,5 @@ if __name__ == "__main__":
     print("Starting hierarchical data simulation...")
     while True:
         generate_and_store_data(SIMULATION_SCENARIOS)
-        time.sleep(10)
+        time.sleep(300)
 

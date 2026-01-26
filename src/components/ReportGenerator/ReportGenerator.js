@@ -156,7 +156,7 @@ const ReportGenerator = ({ user, token }) => {
               disabled={true}
             >
               <option value='SENSOR_HISTORY'>История показаний сенсоров (CSV)</option>
-              {/* <option value="ALERTS_HISTORY">История Тревог (CSV)</option> */}
+              {/* <option value="ALERTS_HISTORY">История показаний (CSV)</option> */}
             </select>
           </div>
 

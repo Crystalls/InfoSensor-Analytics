@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import AssetEditor from './AssetEditor'
 import AddAssetModal from './AddAssetModal'
 import { API_BASE_URL } from '../../services/api'
+import moment from 'moment'
 
 const POLLING_INTERVAL_MS = 10000
 
@@ -170,7 +171,11 @@ const AssetRegistry = ({ user, token, onTokenUpdate }) => {
                 <span className={asset.statusColor}>{asset.status}</span>
               </td>
               <td>{asset.lastValue}</td>
-              <td>{asset.lastTimestamp}</td>
+              <td>
+                {asset.lastTimestamp !== 'N/A'
+                  ? moment.utc(asset.lastTimestamp).local().format('HH:mm:ss') // <-- ФОРМАТИРУЕМ В ЛОКАЛЬНОЕ ВРЕМЯ КЛИЕНТА
+                  : 'N/A'}
+              </td>
               <td>
                 <Link
                   to={`/assets/${asset.name}`}

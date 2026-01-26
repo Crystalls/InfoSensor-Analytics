@@ -817,7 +817,7 @@ app.get('/api/assets-with-live-data', authenticateToken, async (req, res) => {
           // Определение самого свежего показания
           if (new Date(state.last_updated) > new Date(lastTimestamp) || lastTimestamp === 'N/A') {
             lastValue = state.value ? state.value.toFixed(2) : 'N/A'
-            lastTimestamp = moment(state.last_updated).format('HH:mm:ss')
+            lastTimestamp = moment.utc(state.last_updated).toISOString()
           }
         }
       })
@@ -1470,7 +1470,7 @@ app.get('/api/reports/generate', authenticateToken, async (req, res) => {
       }
 
       const formattedData = reportData.map((item) => ({
-        Время: moment(item.timestamp).format('YYYY-MM-DD HH:mm:ss'),
+        Время: moment.utc(item.timestamp).format('YYYY-MM-DD HH:mm:ss'),
         Актив: item.asset,
         'Сенсор ID': item.sensor_id,
         'Тип сенсора': item.sensor_type,
@@ -1494,9 +1494,31 @@ app.get('/api/reports/generate', authenticateToken, async (req, res) => {
     )}`
 
     if (format === 'CSV') {
-      // ... (Логика CSV) ...
+      fileName += '.csv'
+      const parser = new Parser({ fields: fields })
+      const csv = parser.parse(reportData)
+      buffer = Buffer.from(csv, 'utf8')
+
+      // Устанавливаем заголовки для скачивания CSV
+      res.header('Content-Type', 'text/csv; charset=utf-8')
+      res.header('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
+      res.status(200).send(buffer)
+      return
     } else if (format === 'XLSX') {
-      // ... (Логика XLSX) ...
+      fileName += '.xlsx'
+      const workbook = new ExcelJS.Workbook()
+      const worksheet = workbook.addWorksheet('Report')
+
+      worksheet.columns = fields.map((field) => ({ header: field, key: field, width: 20 }))
+      worksheet.addRows(reportData)
+
+      buffer = await workbook.xlsx.writeBuffer()
+
+      // Устанавливаем заголовки для скачивания XLSX
+      res.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      res.header('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
+      res.status(200).send(buffer)
+      return
     } else if (format === 'PDF') {
       fileName += '.pdf'
       const doc = new PDFDocument({ margin: 30, size: 'A4' })
